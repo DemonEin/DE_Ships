@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<Defs>
+	<GenStepDef>
+		<defName>GenStep_Ocean</defName>
+		<order>1600</order>
+		<genStep Class="DE_Ships.GenStep_Ocean" />
+	</GenStepDef>
+</Defs>
