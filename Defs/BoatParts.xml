@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<Defs>
+	<TerrainDef>
+		<defName>Boat_Deck</defName>
+		<label>deck</label>
+		<description>The deck of a ship.</description>
+		<texturePath>Terrain/Surfaces/WoodFloor</texturePath>
+		<uiIconPath>Terrain/Surfaces/WoodFloor</uiIconPath>
+		<layerable>true</layerable>
+		<affordances>
+			<li>Light</li>
+			<li>Medium</li>
+		</affordances>
+		<designationCategory>Structure</designationCategory>
+		<fertility>0</fertility>
+		<constructEffect>ConstructWood</constructEffect>
+		<acceptTerrainSourceFilth>True</acceptTerrainSourceFilth>
+		<edgeType>Hard</edgeType>
+		<renderPrecedence>400</renderPrecedence>
+		<statBases>
+			<WorkToBuild>1500</WorkToBuild>
+			<Flammability>0.8</Flammability>
+		</statBases>
+		<costList>
+			<WoodLog>12</WoodLog>
+		</costList>
+		<designationHotKey>Misc4</designationHotKey>
+		<destroyOnBombDamageThreshold>35</destroyOnBombDamageThreshold>
+		<destroyBuildingsOnDestroyed>true</destroyBuildingsOnDestroyed>
+		<destroyEffect>Bridge_Collapse</destroyEffect>
+		<destroyEffectWater>Bridge_CollapseWater</destroyEffectWater>
+	</TerrainDef>
+</Defs>

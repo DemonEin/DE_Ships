@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<Defs>
+	<DesignationCategoryDef>
+		<defName>ShipyardDesignator</defName>
+		<label>shipyard</label>
+		<order>50</order>
+		<specialDesignatorClasses>
+			<li>DE_Ships.Designator_ZoneAdd_Shipyard</li>
+		</specialDesignatorClasses>
+	</DesignationCategoryDef>
+</Defs>
