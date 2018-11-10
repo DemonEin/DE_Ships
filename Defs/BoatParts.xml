@@ -12,7 +12,7 @@
 			<li>Light</li>
 			<li>Medium</li>
 		</affordances>
-		<designationCategory>Structure</designationCategory>
+		<designationCategory>ShipyardDesignator</designationCategory>
 		<fertility>0</fertility>
 		<constructEffect>ConstructWood</constructEffect>
 		<acceptTerrainSourceFilth>True</acceptTerrainSourceFilth>

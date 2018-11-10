@@ -3,4 +3,5 @@
 <LanguageData>
 	<Shipyard>Shipyard</Shipyard>
   <ShipyardDesignatorDesc>shipyard designator description</ShipyardDesignatorDesc>
+  <CannotBuildOutOfShipyard>Ship structure cannot be build outside of the shipyard.</CannotBuildOutOfShipyard>
 </LanguageData>

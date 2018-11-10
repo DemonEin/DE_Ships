@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+	<WorldObjectDef>
+		<defName>Vessel</defName>
+		<label>vessel</label>
+		<description>A vessel on the water.</description>
+		<worldObjectClass>Vessel</worldObjectClass>
+		<texture>World/WorldObjects/Caravan</texture>
+		<useDynamicDrawer>true</useDynamicDrawer>
+		<expandingIcon>true</expandingIcon>
+		<expandingIconTexture>World/WorldObjects/Expanding/Caravan</expandingIconTexture>
+		<expandingIconPriority>100</expandingIconPriority>
+		<expandMore>true</expandMore>
+	</WorldObjectDef>
+</Defs>

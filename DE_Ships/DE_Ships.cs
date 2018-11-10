@@ -7,6 +7,7 @@ using Verse;
 using System.Reflection;
 using RimWorld;
 using UnityEngine;
+using RimWorld.Planet;
 
 
 namespace DE_Ships
@@ -35,10 +36,13 @@ namespace DE_Ships
         {
             get
             {
+                //TODO: change?
                 return ZoneColorUtility.NextStorageZoneColor();
             }
         }
     }
+
+    //TODO: add expansion designator?
     public class Designator_ZoneAdd_Shipyard : Designator_ZoneAdd
     {
         public Designator_ZoneAdd_Shipyard()
@@ -46,6 +50,7 @@ namespace DE_Ships
             this.zoneTypeToPlace = typeof(Zone_Shipyard);
             this.defaultLabel = "Shipyard".Translate();
             this.defaultDesc = "ShipyardDesignatorDesc".Translate();
+            //TODO: change
             this.icon = ContentFinder<Texture2D>.Get("UI/Designators/ZoneCreate_Growing", true);
             //TODO: not sure what this does, take a look
             this.tutorTag = "ZoneAdd_Shipyard";
@@ -60,6 +65,25 @@ namespace DE_Ships
         protected override Zone MakeNewZone()
         {
             return (Zone)new Zone_Shipyard(Find.CurrentMap.zoneManager);
+        }
+        public override AcceptanceReport CanDesignateCell(IntVec3 c)
+        {
+            if (!c.InBounds(this.Map))
+                return (AcceptanceReport)false;
+            if (c.Fogged(this.Map))
+                return (AcceptanceReport)false;
+            //if (c.InNoZoneEdgeArea(this.Map))
+                //return (AcceptanceReport)"TooCloseToMapEdge".Translate();
+            Zone zone = this.Map.zoneManager.ZoneAt(c);
+            if (zone != null && zone.GetType() != this.zoneTypeToPlace)
+                return (AcceptanceReport)false;
+            foreach (Thing thing in this.Map.thingGrid.ThingsAt(c))
+            {
+                if (!thing.def.CanOverlapZones)
+                    return (AcceptanceReport)false;
+            }
+
+            return (AcceptanceReport)true;
         }
     }
     class GenStep_Ocean : GenStep
@@ -81,9 +105,8 @@ namespace DE_Ships
             map.terrainGrid.SetTerrain(new IntVec3(5, 0, 10), TerrainDefOf.Gravel);
         }
     }
-
     //based on Verse.TerrainGrid
-    public class Ship_Structure
+    public class Vessel_Structure
     {
         private Map map;
         public TerrainDef[] topGrid;
@@ -282,7 +305,6 @@ namespace DE_Ships
             return "top: " + (terrain == null ? "null" : terrain.defName) + ", under=" + (terrainDef == null ? "null" : terrainDef.defName);
         }
     }
-}
 
     [StaticConstructorOnStartup]
     public static class WaterGenerator
@@ -297,7 +319,20 @@ namespace DE_Ships
             oceanGenSteps.Add(new GenStepWithParams(DefDatabase<GenStepDef>.GetNamed("ScenParts"), emptyParams));
             oceanGenSteps.Add(new GenStepWithParams(DefDatabase<GenStepDef>.GetNamed("Fog"), emptyParams));
         }
-
+    }
+    //inpspired by SettlementAbandonUtility
+    public class EmbarkShipUtility
+    {
+        public static Command EmbarkCommand()
+        {
+            Command_Action commandAction = new Command_Action();
+            commandAction.defaultLabel = "ayylmao";
+            commandAction.defaultDesc = "CommandAbandonHomeDesc".Translate();
+            //commandAction.icon = SettlementAbandonUtility.AbandonCommandTex;
+            commandAction.order = 30f;
+            return (Command)commandAction;
+        }
+    }
     [HarmonyPatch(typeof(MapGenerator))]
     [HarmonyPatch("GenerateContentsIntoMap")]
     class MapGeneratorPatch
@@ -346,6 +381,36 @@ namespace DE_Ships
             }
 
             return false;
+        }
+    }
+    [HarmonyPatch(typeof(GenConstruct))]
+    [HarmonyPatch("CanPlaceBlueprintAt")]
+    class ShipConstructionPatch
+    {
+        static void Postfix(BuildableDef entDef, IntVec3 center, Map map, ref AcceptanceReport __result)
+        {
+            if (__result.Accepted && entDef.designationCategory.defName.Equals("ShipyardDesignator"))
+            {
+                if (!(map.zoneManager.ZoneAt(center) is DE_Ships.Zone_Shipyard))
+                {
+                    __result = new AcceptanceReport("CannotBuildOutOfShipyard".Translate());
+                }
+            }
+        }
+    }
+    [HarmonyPatch(typeof(SettlementBase))]
+    [HarmonyPatch("GetGizmos")]
+    class SettlementGizmoPatch
+    {
+        static void Postfix(ref IEnumerable<Gizmo> __result)
+        {
+            List<Gizmo> newResult = new List<Gizmo>();
+            foreach (Gizmo gizmo in __result)
+            {
+                newResult.Add(gizmo);
+            }
+            newResult.Add(EmbarkShipUtility.EmbarkCommand());
+            __result = newResult;
         }
     }
 }
