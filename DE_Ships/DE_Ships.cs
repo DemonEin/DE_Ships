@@ -358,18 +358,21 @@ namespace DE_Ships
         }
     }
     //inpspired by SettlementAbandonUtility
-    public class EmbarkShipUtility
+    public static class EmbarkShipUtility
     {
-        private static void EmbarkAction()
+        private static MapParent sourceWorldObject;
+        private static int tile;
+        private static void EmbarkActionBeforeLaunch()
         {
-            int tile = TileFinder.RandomStartingTile();
+            
+            tile = TileFinder.RandomStartingTile();
             Vessel factionBase = (Vessel)WorldObjectMaker.MakeWorldObject(DefDatabase<WorldObjectDef>.GetNamed("Vessel"));
             factionBase.Tile = tile;
             factionBase.SetFaction(Find.FactionManager.AllFactionsListForReading[4]);
             factionBase.Name = SettlementNameGenerator.GenerateSettlementName(factionBase, (RulePackDef)null);
             Find.WorldObjects.Add((WorldObject)factionBase);
             Zone_Shipyard shipyard = null;
-            MapParent sourceWorldObject = (MapParent)Find.WorldSelector.SingleSelectedObject;
+            sourceWorldObject = (MapParent)Find.WorldSelector.SingleSelectedObject;
             //finds the shipyard in the map of the selected object
             bool b = true;
             int i = 0;
@@ -385,12 +388,18 @@ namespace DE_Ships
             }
             factionBase.structure = new Vessel_Structure(sourceWorldObject.Map, shipyard);
             WaterGenerator.cachedStructure = factionBase.structure;
+            Find.WindowStack.Add((Window) new Dialog_FormCaravan(sourceWorldObject.Map, false, EmbarkActionAfterLaunch));
+            
+        }
+        private static void EmbarkActionAfterLaunch()
+        {
             GetOrGenerateMapUtility.GetOrGenerateMap(tile, Find.World.info.initialMapSize, null);
         }
+
         public static Command EmbarkCommand()
         {
             Command_Action commandAction = new Command_Action();
-            Action action = EmbarkAction;
+            Action action = EmbarkActionBeforeLaunch;
             commandAction.defaultLabel = "ayylmao";
             commandAction.defaultDesc = "CommandAbandonHomeDesc".Translate();
             //commandAction.icon = SettlementAbandonUtility.AbandonCommandTex;
