@@ -43,6 +43,7 @@ namespace DE_Ships
     }
 
     //TODO: add expansion designator?
+    //TODO: handle creation of multiple shipyards
     public class Designator_ZoneAdd_Shipyard : Designator_ZoneAdd
     {
         public Designator_ZoneAdd_Shipyard()
@@ -88,6 +89,7 @@ namespace DE_Ships
     }
     class GenStep_Ocean : GenStep
     {
+        private Vessel_Structure structure;
         public override int SeedPart
         {
             get
@@ -97,38 +99,73 @@ namespace DE_Ships
         }
         public override void Generate(Map map, GenStepParams parms)
         {
+            structure = WaterGenerator.cachedStructure;
             foreach (IntVec3 allCell in map.AllCells)
             {
                 map.terrainGrid.SetTerrain(allCell, TerrainDefOf.WaterOceanDeep);
                 //map.terrainGrid.SetTerrain(allCell, TerrainDefOf.Soil);
             }
-            map.terrainGrid.SetTerrain(new IntVec3(5, 0, 10), TerrainDefOf.Gravel);
+            foreach (IntVec3 cell in structure.cells)
+            {
+                map.terrainGrid.SetTerrain(cell, structure.TerrainAt(cell));
+                map.terrainGrid.SetUnderTerrain(cell, structure.UnderTerrainAt(cell));
+            }
         }
+    }
+    public class Vessel : Settlement
+    {
+
+        public Vessel_Structure structure;
+        /*
+        public Vessel ()
+        {
+            this.SetFaction(Faction.OfPlayer);
+        }
+        */
+        /*
+        Vessel (int spawnTile, Zone_Shipyard shipyard)
+        {
+            this.Tile = spawnTile;
+        }
+        */
+        /*
+        public override IEnumerable<GenStepWithParams> ExtraGenStepDefs
+        {
+            get
+            {
+                return WaterGenerator.oceanGenSteps;
+            }
+        }
+        */
     }
     //based on Verse.TerrainGrid
     public class Vessel_Structure
     {
+
         private Map map;
         public TerrainDef[] topGrid;
-        private TerrainDef[] underGrid;
+        public TerrainDef[] underGrid;
+        public List<IntVec3> cells = new List<IntVec3>();
 
-        //constructs a Ship_Structure from the corners of a rectangle of a TerrainGrid from which to form a ship
-        public Ship_Structure(TerrainGrid baseTerrain, IntVec3 botLeftCorner, IntVec3 topRightCorner)
+        //constructs a Ship_Structure from the corners of a rectangle on a map from which to form a ship
+        public Vessel_Structure(Map map, Zone_Shipyard shipyard)
         {
-            //this.map = map;
-            this.ResetGrids();
-            IntVec3 currentTile = new IntVec3();
-            for (int x = botLeftCorner.x; x <= topRightCorner.x; x++)
+            this.map = map;
+            ResetGrids();
+            foreach(IntVec3 cell in shipyard.cells)
             {
-                for (int z = botLeftCorner.z; z <= botLeftCorner.z; z++)
+                if (map.terrainGrid.TerrainAt(cell) != null)
                 {
-                    currentTile.x = x;
-                    currentTile.z = z;
-                    if (baseTerrain.TerrainAt(currentTile).defName.Contains("Boat_")) {
-                        this.SetTerrain(currentTile, baseTerrain.TerrainAt(currentTile));
-                    }
+                    SetTerrain(cell, map.terrainGrid.TerrainAt(cell));
                 }
+                if (map.terrainGrid.UnderTerrainAt(cell) != null)
+                {
+                    SetUnderTerrain(cell, map.terrainGrid.UnderTerrainAt(cell));
+                }
+                this.cells.Add(cell);
+                Log.Error("cell set to structure");
             }
+            Log.Error("Generated vessel structure; cell count: " + cells.Count);
         }
 
         public void ResetGrids()
@@ -310,6 +347,7 @@ namespace DE_Ships
     public static class WaterGenerator
     {
         public static List<GenStepWithParams> oceanGenSteps = new List<GenStepWithParams>();
+        public static Vessel_Structure cachedStructure;
 
         static WaterGenerator()
         {
@@ -323,13 +361,46 @@ namespace DE_Ships
     //inpspired by SettlementAbandonUtility
     public class EmbarkShipUtility
     {
+        private static void EmbarkAction()
+        {
+            int tile = TileFinder.RandomStartingTile();
+            Vessel factionBase = (Vessel)WorldObjectMaker.MakeWorldObject(DefDatabase<WorldObjectDef>.GetNamed("Vessel"));
+            factionBase.Tile = tile;
+            factionBase.SetFaction(Find.FactionManager.AllFactionsListForReading[4]);
+            factionBase.Name = SettlementNameGenerator.GenerateSettlementName(factionBase, (RulePackDef)null);
+            Find.WorldObjects.Add((WorldObject)factionBase);
+            Zone_Shipyard shipyard = null;
+            MapParent sourceWorldObject = (MapParent)Find.WorldSelector.SingleSelectedObject;
+            //finds the shipyard in the map of the selected object
+            bool b = true;
+            int i = 0;
+            while (b && i < (sourceWorldObject.Map.zoneManager.AllZones.Count))
+            {
+                
+                if (sourceWorldObject.Map.zoneManager.AllZones[i] is Zone_Shipyard)
+                {
+                    shipyard = (Zone_Shipyard)sourceWorldObject.Map.zoneManager.AllZones[i];
+                    b = false;
+                }
+                i++;
+                if (!b)
+                {
+                    Log.Error("shipyard found");
+                }
+            }
+            factionBase.structure = new Vessel_Structure(sourceWorldObject.Map, shipyard);
+            WaterGenerator.cachedStructure = factionBase.structure;
+            GetOrGenerateMapUtility.GetOrGenerateMap(tile, Find.World.info.initialMapSize, null);
+        }
         public static Command EmbarkCommand()
         {
             Command_Action commandAction = new Command_Action();
+            Action action = EmbarkAction;
             commandAction.defaultLabel = "ayylmao";
             commandAction.defaultDesc = "CommandAbandonHomeDesc".Translate();
             //commandAction.icon = SettlementAbandonUtility.AbandonCommandTex;
             commandAction.order = 30f;
+            commandAction.action = action;
             return (Command)commandAction;
         }
     }
@@ -402,13 +473,25 @@ namespace DE_Ships
     [HarmonyPatch("GetGizmos")]
     class SettlementGizmoPatch
     {
-        static void Postfix(ref IEnumerable<Gizmo> __result)
+        static void Postfix(ref IEnumerable<Gizmo> __result, SettlementBase __instance)
         {
             List<Gizmo> newResult = new List<Gizmo>();
             foreach (Gizmo gizmo in __result)
             {
                 newResult.Add(gizmo);
             }
+            //FEATURE NOT IMPLEMENTED
+            /*
+            //adds an embark ship button for every shipyard in the map
+            foreach (Zone zone in __instance.Map.zoneManager.AllZones)
+            {
+                if (zone is Zone_Shipyard)
+                {
+                    newResult.Add(EmbarkShipUtility.EmbarkCommand());
+                    (Command)newResult.Last()).def
+                }
+            }
+            */
             newResult.Add(EmbarkShipUtility.EmbarkCommand());
             __result = newResult;
         }
