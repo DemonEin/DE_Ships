@@ -360,8 +360,11 @@ namespace DE_Ships
     //inpspired by SettlementAbandonUtility
     public static class EmbarkShipUtility
     {
+        public static bool EmbarkUIActive = false;
         private static MapParent sourceWorldObject;
         private static int tile;
+        private static Dialog_FormCaravan EmbarkUI;
+
         private static void EmbarkActionBeforeLaunch()
         {
             
@@ -388,12 +391,16 @@ namespace DE_Ships
             }
             factionBase.structure = new Vessel_Structure(sourceWorldObject.Map, shipyard);
             WaterGenerator.cachedStructure = factionBase.structure;
-            Find.WindowStack.Add((Window) new Dialog_FormCaravan(sourceWorldObject.Map, false, EmbarkActionAfterLaunch));
-            
+            EmbarkUIActive = true;
+            EmbarkUI = new Dialog_FormCaravan(sourceWorldObject.Map, false, EmbarkActionAfterLaunch);
+            Find.WindowStack.Add(EmbarkUI);
         }
         private static void EmbarkActionAfterLaunch()
         {
-            GetOrGenerateMapUtility.GetOrGenerateMap(tile, Find.World.info.initialMapSize, null);
+            Map newMap;
+            EmbarkUIActive = false;
+            newMap = GetOrGenerateMapUtility.GetOrGenerateMap(tile, Find.World.info.initialMapSize, null);
+            CaravanEnterMapUtility.Enter(CaravanExitMapUtility.ExitMapAndCreateCaravan(TransferableUtility.GetPawnsFromTransferables(EmbarkUI.transferables), Faction.OfPlayer, sourceWorldObject.Tile, sourceWorldObject.Tile, -1, true), newMap, CaravanEnterMode.Center);
         }
 
         public static Command EmbarkCommand()
@@ -498,6 +505,16 @@ namespace DE_Ships
             */
             newResult.Add(EmbarkShipUtility.EmbarkCommand());
             __result = newResult;
+        }
+    }
+    [HarmonyPatch(typeof(CaravanFormingUtility))]
+    [HarmonyPatch("FormAndCreateCaravan")]
+    class CreateCaravanPatch
+    {
+        static bool Prefix()
+        {
+
+            return !EmbarkShipUtility.EmbarkUIActive;
         }
     }
 }
