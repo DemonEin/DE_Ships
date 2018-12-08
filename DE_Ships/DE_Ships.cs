@@ -114,8 +114,9 @@ namespace DE_Ships
     }
     public class Vessel : Settlement
     {
-
         public Vessel_Structure structure;
+        //the caravan that represents the vessel on the world map
+        public Caravan caravan;
         /*
         public Vessel ()
         {
@@ -163,9 +164,7 @@ namespace DE_Ships
                     SetUnderTerrain(cell, map.terrainGrid.UnderTerrainAt(cell));
                 }
                 this.cells.Add(cell);
-                Log.Error("cell set to structure");
             }
-            Log.Error("Generated vessel structure; cell count: " + cells.Count);
         }
 
         public void ResetGrids()
@@ -383,10 +382,6 @@ namespace DE_Ships
                     b = false;
                 }
                 i++;
-                if (!b)
-                {
-                    Log.Error("shipyard found");
-                }
             }
             factionBase.structure = new Vessel_Structure(sourceWorldObject.Map, shipyard);
             WaterGenerator.cachedStructure = factionBase.structure;
