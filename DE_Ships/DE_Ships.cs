@@ -111,7 +111,8 @@ namespace DE_Ships
                 map.terrainGrid.SetTerrain(cell + newOffset, structure.TerrainAt(cell));
                 map.terrainGrid.SetUnderTerrain(cell + newOffset, structure.UnderTerrainAt(cell));
             }
-            //MapGenerator.PlayerStartSpot = map.Center;
+            //only included to avoid an error, this is not actually used (I think)
+            MapGenerator.PlayerStartSpot = map.Center;
         }
     }
     public class Vessel : Settlement
@@ -176,9 +177,6 @@ namespace DE_Ships
                 cells.Add(cell);
             }
             Center = new IntVec3(avgNumerator.x / avgDenom, avgNumerator.y / avgDenom, avgNumerator.z / avgDenom);
-            Log.Error("topGrid.Length: " + topGrid.Length);
-            Log.Error("underGrid.Length: " + topGrid.Length);
-            Log.Error("cells.Count: " + cells.Count);
         }
 
         public void ResetGrids()
@@ -434,7 +432,7 @@ namespace DE_Ships
             Map newMap;
             EmbarkUIActive = false;
             newMap = GetOrGenerateMapUtility.GetOrGenerateMap(tile, Find.World.info.initialMapSize, null);
-            CaravanEnterMapUtility.Enter(CaravanExitMapUtility.ExitMapAndCreateCaravan(TransferableUtility.GetPawnsFromTransferables(EmbarkUI.transferables), Faction.OfPlayer, sourceWorldObject.Tile, sourceWorldObject.Tile, -1, true), newMap, CaravanEnterMode.Center);
+            CaravanEnterMapUtility.Enter(CaravanExitMapUtility.ExitMapAndCreateCaravan(TransferableUtility.GetPawnsFromTransferables(EmbarkUI.transferables), Faction.OfPlayer, sourceWorldObject.Tile, sourceWorldObject.Tile, -1, true), newMap, (Func<Pawn, IntVec3>)(p => factionBase.Map.Center));
         }
 
         public static Command EmbarkCommand()
@@ -553,6 +551,20 @@ namespace DE_Ships
         {
 
             return !EmbarkShipUtility.EmbarkUIActive;
+        }
+    }
+    [HarmonyPatch(typeof(Reachability))]
+    [HarmonyPatch("CanReachMapEdge")]
+    class CanReachMapEdgePatch
+    {
+        static bool Prefix(ref bool __result)
+        {
+            if (EmbarkShipUtility.EmbarkUIActive)
+            {
+                __result = true;
+                return false;
+            }
+            return true;
         }
     }
 }
