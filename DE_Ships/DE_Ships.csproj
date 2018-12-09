@@ -51,8 +51,11 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Dialog_EmbarkVessel.cs" />
     <Compile Include="DE_Ships.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="VesselRoutePlanner.cs" />
+    <Compile Include="VesselTicksPerMoveUtility.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

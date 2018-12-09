@@ -1,3 +1,4 @@
 ISSUES:
 when vessel is embarked, it is created at an arbitrary adjacent tile
 client side "error message" when vessel is created
+pawns are placed at the center of the vessel map, which may or may not be a valid location
