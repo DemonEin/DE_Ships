@@ -432,6 +432,8 @@ namespace DE_Ships
             Map newMap;
             EmbarkUIActive = false;
             newMap = GetOrGenerateMapUtility.GetOrGenerateMap(tile, Find.World.info.initialMapSize, null);
+            //ISSUE: user "error message"
+            //ISSUE: pawns are placed at the center of the map, which may or may not be a valid location
             CaravanEnterMapUtility.Enter(CaravanExitMapUtility.ExitMapAndCreateCaravan(TransferableUtility.GetPawnsFromTransferables(EmbarkUI.transferables), Faction.OfPlayer, sourceWorldObject.Tile, sourceWorldObject.Tile, -1, true), newMap, (Func<Pawn, IntVec3>)(p => factionBase.Map.Center));
         }
 
