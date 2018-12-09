@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 
+
 <Defs>
+  <!--
   <BiomeDef>
     <defName>Ocean</defName>
     <label>ocean</label>
@@ -26,4 +28,5 @@
     <texture>World/Biomes/Ocean</texture>
     <impassable>true</impassable>
   </BiomeDef>
+  -->
 </Defs>

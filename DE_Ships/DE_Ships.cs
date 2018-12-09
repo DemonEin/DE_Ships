@@ -105,11 +105,13 @@ namespace DE_Ships
                 map.terrainGrid.SetTerrain(allCell, TerrainDefOf.WaterOceanDeep);
                 //map.terrainGrid.SetTerrain(allCell, TerrainDefOf.Soil);
             }
+            IntVec3 newOffset = map.Center - structure.Center;
             foreach (IntVec3 cell in structure.cells)
             {
-                map.terrainGrid.SetTerrain(cell, structure.TerrainAt(cell));
-                map.terrainGrid.SetUnderTerrain(cell, structure.UnderTerrainAt(cell));
+                map.terrainGrid.SetTerrain(cell + newOffset, structure.TerrainAt(cell));
+                map.terrainGrid.SetUnderTerrain(cell + newOffset, structure.UnderTerrainAt(cell));
             }
+            //MapGenerator.PlayerStartSpot = map.Center;
         }
     }
     public class Vessel : Settlement
@@ -147,24 +149,36 @@ namespace DE_Ships
         public TerrainDef[] topGrid;
         public TerrainDef[] underGrid;
         public List<IntVec3> cells = new List<IntVec3>();
+        //(uses int division, may need to be adjusted)
+        public IntVec3 Center;
 
-        //constructs a Ship_Structure from the corners of a rectangle on a map from which to form a ship
+        //constructs a Ship_Structure
         public Vessel_Structure(Map map, Zone_Shipyard shipyard)
         {
             this.map = map;
             ResetGrids();
+            int avgDenom = 0;
+            IntVec3 avgNumerator = IntVec3.Zero;
             foreach(IntVec3 cell in shipyard.cells)
             {
                 if (map.terrainGrid.TerrainAt(cell) != null)
                 {
                     SetTerrain(cell, map.terrainGrid.TerrainAt(cell));
+                    avgNumerator += cell;
+                    avgDenom++;
                 }
                 if (map.terrainGrid.UnderTerrainAt(cell) != null)
                 {
                     SetUnderTerrain(cell, map.terrainGrid.UnderTerrainAt(cell));
+                    avgNumerator += cell;
+                    avgDenom++;
                 }
-                this.cells.Add(cell);
+                cells.Add(cell);
             }
+            Center = new IntVec3(avgNumerator.x / avgDenom, avgNumerator.y / avgDenom, avgNumerator.z / avgDenom);
+            Log.Error("topGrid.Length: " + topGrid.Length);
+            Log.Error("underGrid.Length: " + topGrid.Length);
+            Log.Error("cells.Count: " + cells.Count);
         }
 
         public void ResetGrids()
@@ -352,7 +366,7 @@ namespace DE_Ships
         {
             GenStepParams emptyParams = new GenStepParams();
             oceanGenSteps.Add(new GenStepWithParams(DefDatabase<GenStepDef>.GetNamed("GenStep_Ocean"), emptyParams));
-            oceanGenSteps.Add(new GenStepWithParams(DefDatabase<GenStepDef>.GetNamed("FindPlayerStartSpot"), emptyParams));
+            //oceanGenSteps.Add(new GenStepWithParams(DefDatabase<GenStepDef>.GetNamed("FindPlayerStartSpot"), emptyParams));
             oceanGenSteps.Add(new GenStepWithParams(DefDatabase<GenStepDef>.GetNamed("ScenParts"), emptyParams));
             oceanGenSteps.Add(new GenStepWithParams(DefDatabase<GenStepDef>.GetNamed("Fog"), emptyParams));
         }
@@ -364,24 +378,50 @@ namespace DE_Ships
         private static MapParent sourceWorldObject;
         private static int tile;
         private static Dialog_FormCaravan EmbarkUI;
+        
+        //ISSUE: arbitrary choice of tile if multiple tiles
+        public static int AdjacentOceanTile(int tileID)
+        {
+            List<int> tileNeighbors = new List<int>();
+            List<int> oceanNeighbors = new List<int>();
+            Find.WorldGrid.GetTileNeighbors(tileID, tileNeighbors);
+            foreach (int tile in tileNeighbors)
+            {
+                if (Find.WorldGrid.tiles[tile].biome.defName.Equals("Ocean"))
+                {
+                    oceanNeighbors.Add(tile);
+                }
+            }
+            if (oceanNeighbors.Count < 1)
+            {
+                return -1;
+            }
+            return oceanNeighbors[0];
+        }
 
         private static void EmbarkActionBeforeLaunch()
         {
             
-            tile = TileFinder.RandomStartingTile();
+            sourceWorldObject = (MapParent)Find.WorldSelector.SingleSelectedObject;
+            EmbarkUIActive = true;
+            EmbarkUI = new Dialog_FormCaravan(sourceWorldObject.Map, false, EmbarkActionAfterLaunch);
+            Find.WindowStack.Add(EmbarkUI);
+        }
+        private static void EmbarkActionAfterLaunch()
+        {
             Vessel factionBase = (Vessel)WorldObjectMaker.MakeWorldObject(DefDatabase<WorldObjectDef>.GetNamed("Vessel"));
-            factionBase.Tile = tile;
             factionBase.SetFaction(Find.FactionManager.AllFactionsListForReading[4]);
             factionBase.Name = SettlementNameGenerator.GenerateSettlementName(factionBase, (RulePackDef)null);
+            tile = AdjacentOceanTile(sourceWorldObject.Tile);
+            factionBase.Tile = tile;
             Find.WorldObjects.Add((WorldObject)factionBase);
             Zone_Shipyard shipyard = null;
-            sourceWorldObject = (MapParent)Find.WorldSelector.SingleSelectedObject;
             //finds the shipyard in the map of the selected object
             bool b = true;
             int i = 0;
             while (b && i < (sourceWorldObject.Map.zoneManager.AllZones.Count))
             {
-                
+
                 if (sourceWorldObject.Map.zoneManager.AllZones[i] is Zone_Shipyard)
                 {
                     shipyard = (Zone_Shipyard)sourceWorldObject.Map.zoneManager.AllZones[i];
@@ -391,12 +431,6 @@ namespace DE_Ships
             }
             factionBase.structure = new Vessel_Structure(sourceWorldObject.Map, shipyard);
             WaterGenerator.cachedStructure = factionBase.structure;
-            EmbarkUIActive = true;
-            EmbarkUI = new Dialog_FormCaravan(sourceWorldObject.Map, false, EmbarkActionAfterLaunch);
-            Find.WindowStack.Add(EmbarkUI);
-        }
-        private static void EmbarkActionAfterLaunch()
-        {
             Map newMap;
             EmbarkUIActive = false;
             newMap = GetOrGenerateMapUtility.GetOrGenerateMap(tile, Find.World.info.initialMapSize, null);
@@ -486,6 +520,10 @@ namespace DE_Ships
     {
         static void Postfix(ref IEnumerable<Gizmo> __result, SettlementBase __instance)
         {
+            if (EmbarkShipUtility.AdjacentOceanTile(__instance.Tile) == -1)
+            {
+                return;
+            }
             List<Gizmo> newResult = new List<Gizmo>();
             foreach (Gizmo gizmo in __result)
             {
