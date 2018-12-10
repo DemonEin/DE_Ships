@@ -112,10 +112,9 @@ namespace DE_Ships
                 map.terrainGrid.SetUnderTerrain(cell + newOffset, structure.UnderTerrainAt(cell));
                 foreach (Thing thing in structure.ThingsListAtFast(cell))
                 {
-                    thing.DeSpawn();
                     thing.SpawnSetup(map, false);
                     thing.Position += newOffset;
-                    //map.thingGrid.Register(thing);
+                    map.thingGrid.Register(thing);
                 }
             }
             //only included to avoid an error, this is not actually used (I think)
@@ -188,16 +187,15 @@ namespace DE_Ships
                     avgNumerator += cell;
                     avgDenom++;
                 }
-                if (map.thingGrid.ThingsListAtFast(cell) != null)
+                List<Thing> thingList = map.thingGrid.ThingsListAtFast(cell);
+                for (int i = thingList.Count - 1; i >= 0; i--)
                 {
-                    foreach (Thing thing in map.thingGrid.ThingsListAtFast(cell))
-                    {
-                        RegisterInCell(thing, cell);
-                    }
+                    RegisterInCell(thingList[i], cell);
+                    thingList[i].DeSpawn();
+
                     avgNumerator += cell;
                     avgDenom++;
                 }
-
                 cells.Add(cell);
             }
             Center = new IntVec3(avgNumerator.x / avgDenom, avgNumerator.y / avgDenom, avgNumerator.z / avgDenom);
@@ -247,12 +245,18 @@ namespace DE_Ships
                 if (Current.ProgramState == ProgramState.Playing)
                     this.map.designationManager.DesignationAt(c, DesignationDefOf.SmoothFloor)?.Delete();
                 int index = this.map.cellIndices.CellToIndex(c);
+                /*
                 if (newTerr.layerable)
                 {
                     if (this.underGrid[index] == null)
+                    {
+                        //causes NullReferenceException
                         this.underGrid[index] = this.topGrid[index].passability == Traversability.Impassable ? TerrainDefOf.Sand : this.topGrid[index];
+                    }
+                        
                 }
                 else
+                */
                     this.underGrid[index] = (TerrainDef)null;
                 this.topGrid[index] = newTerr;
                 this.DoTerrainChangedEffects(c);
