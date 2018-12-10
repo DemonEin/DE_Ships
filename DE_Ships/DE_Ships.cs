@@ -175,28 +175,32 @@ namespace DE_Ships
             IntVec3 avgNumerator = IntVec3.Zero;
             foreach (IntVec3 cell in shipyard.cells)
             {
-                if (map.terrainGrid.TerrainAt(cell) != null)
+                if (map.terrainGrid.TerrainAt(cell).defName.StartsWith("Boat_"))
                 {
-                    SetTerrain(cell, map.terrainGrid.TerrainAt(cell));
-                    avgNumerator += cell;
-                    avgDenom++;
-                }
-                if (map.terrainGrid.UnderTerrainAt(cell) != null)
-                {
-                    SetUnderTerrain(cell, map.terrainGrid.UnderTerrainAt(cell));
-                    avgNumerator += cell;
-                    avgDenom++;
-                }
-                List<Thing> thingList = map.thingGrid.ThingsListAtFast(cell);
-                for (int i = thingList.Count - 1; i >= 0; i--)
-                {
-                    RegisterInCell(thingList[i], cell);
-                    thingList[i].DeSpawn();
+                    if (map.terrainGrid.TerrainAt(cell) != null && map.terrainGrid.TerrainAt(cell).defName.StartsWith("Boat_"))
+                    {
+                        SetTerrain(cell, map.terrainGrid.TerrainAt(cell));
+                        map.terrainGrid.RemoveTopLayer(cell, false);
+                        avgNumerator += cell;
+                        avgDenom++;
+                    }
+                    if (map.terrainGrid.UnderTerrainAt(cell) != null)
+                    {
+                        SetUnderTerrain(cell, map.terrainGrid.UnderTerrainAt(cell));
+                        avgNumerator += cell;
+                        avgDenom++;
+                    }
+                    List<Thing> thingList = map.thingGrid.ThingsListAtFast(cell);
+                    for (int i = thingList.Count - 1; i >= 0; i--)
+                    {
+                        RegisterInCell(thingList[i], cell);
+                        thingList[i].DeSpawn();
 
-                    avgNumerator += cell;
-                    avgDenom++;
+                        avgNumerator += cell;
+                        avgDenom++;
+                    }
+                    cells.Add(cell);
                 }
-                cells.Add(cell);
             }
             Center = new IntVec3(avgNumerator.x / avgDenom, avgNumerator.y / avgDenom, avgNumerator.z / avgDenom);
         }
@@ -573,6 +577,7 @@ namespace DE_Ships
         }
         private static void EmbarkActionAfterLaunch()
         {
+            Caravan newCaravan = CaravanExitMapUtility.ExitMapAndCreateCaravan(TransferableUtility.GetPawnsFromTransferables(EmbarkUI.transferables), Faction.OfPlayer, sourceWorldObject.Tile, sourceWorldObject.Tile, -1, true);
             Vessel factionBase = (Vessel)WorldObjectMaker.MakeWorldObject(DefDatabase<WorldObjectDef>.GetNamed("Vessel"));
             factionBase.SetFaction(Find.FactionManager.AllFactionsListForReading[4]);
             factionBase.Name = SettlementNameGenerator.GenerateSettlementName(factionBase, (RulePackDef)null);
@@ -596,12 +601,12 @@ namespace DE_Ships
             factionBase.structure = new Vessel_Structure(sourceWorldObject.Map, shipyard);
             WaterGenerator.cachedStructure = factionBase.structure;
             Map newMap;
-            EmbarkUIActive = false;
             newMap = GetOrGenerateMapUtility.GetOrGenerateMap(tile, Find.World.info.initialMapSize, null);
             //ISSUE: user "error message"
             //ISSUE: pawns are placed at the center of the map, which may or may not be a valid location
             //ISSUE: weather warning message
-            CaravanEnterMapUtility.Enter(CaravanExitMapUtility.ExitMapAndCreateCaravan(TransferableUtility.GetPawnsFromTransferables(EmbarkUI.transferables), Faction.OfPlayer, sourceWorldObject.Tile, sourceWorldObject.Tile, -1, true), newMap, (Func<Pawn, IntVec3>)(p => factionBase.Map.Center));
+            CaravanEnterMapUtility.Enter(newCaravan, newMap, (Func<Pawn, IntVec3>)(p => factionBase.Map.Center));
+            EmbarkUIActive = false;
         }
 
         public static Command EmbarkCommand()
