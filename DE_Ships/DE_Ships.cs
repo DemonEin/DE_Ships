@@ -46,7 +46,7 @@ namespace DE_Ships
     {
         private static void MoveAction()
         {
-            MapParent sourceWorldObject = (MapParent)Find.WorldSelector.SingleSelectedObject;
+            Vessel sourceWorldObject = (Vessel)Find.WorldSelector.SingleSelectedObject;
             sourceWorldObject.Tile = EmbarkShipUtility.AdjacentOceanTile(sourceWorldObject.Tile);
         }
         public static Command MoveCommand()
@@ -147,10 +147,6 @@ namespace DE_Ships
         //the caravan that represents the vessel on the world map
         public Caravan caravan;
 
-        public Vessel()
-        {
-            this.caravan.def.selectable = false;
-        }
         public new void SetFaction(Faction faction)
         {
             base.SetFaction(faction);
@@ -162,6 +158,10 @@ namespace DE_Ships
             {
                 base.Tile = value;
                 caravan.Tile = value;
+            }
+            get
+            {
+                return base.Tile;
             }
         }
         /*
@@ -605,9 +605,10 @@ namespace DE_Ships
         private static void EmbarkActionAfterLaunch()
         {
             Caravan newCaravan = CaravanExitMapUtility.ExitMapAndCreateCaravan(TransferableUtility.GetPawnsFromTransferables(EmbarkUI.transferables), Faction.OfPlayer, sourceWorldObject.Tile, sourceWorldObject.Tile, -1, true);
+            newCaravan.def.selectable = false;
             Vessel factionBase = (Vessel)WorldObjectMaker.MakeWorldObject(DefDatabase<WorldObjectDef>.GetNamed("Vessel"));
             factionBase.caravan = newCaravan;
-            factionBase.SetFaction(Find.FactionManager.AllFactionsListForReading[4]);
+            factionBase.SetFaction(Faction.OfPlayer);
             tile = AdjacentOceanTile(sourceWorldObject.Tile);
             factionBase.Tile = tile;
             Find.WorldObjects.Add((WorldObject)factionBase);
