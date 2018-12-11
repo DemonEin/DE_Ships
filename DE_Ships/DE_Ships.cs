@@ -742,13 +742,4 @@ namespace DE_Ships
             return true;
         }
     }
-    [HarmonyPatch(typeof(Dialog_FormCaravan))]
-    [HarmonyPatch("DoBottomButtons")]
-    class TestPatch
-    {
-        static void Prefix()
-        {
-            Log.Error("success");
-        }
-    }
 }
