@@ -110,6 +110,12 @@ namespace DE_Ships
             {
                 map.terrainGrid.SetTerrain(cell + newOffset, structure.TerrainAt(cell));
                 map.terrainGrid.SetUnderTerrain(cell + newOffset, structure.UnderTerrainAt(cell));
+                foreach (Thing thing in structure.ThingsListAtFast(cell))
+                {
+                    thing.SpawnSetup(map, false);
+                    thing.Position += newOffset;
+                    map.thingGrid.Register(thing);
+                }
             }
             //only included to avoid an error, this is not actually used (I think)
             MapGenerator.PlayerStartSpot = map.Center;
@@ -142,47 +148,74 @@ namespace DE_Ships
         }
         */
     }
-    //based on Verse.TerrainGrid
+    //based on Verse.TerrainGrid and Verse.ThingGrid
     public class Vessel_Structure
     {
-
+        //Verse.TerrainGrid variables
         private Map map;
         public TerrainDef[] topGrid;
         public TerrainDef[] underGrid;
+
+        //Verse.ThingGrid variables
+        private static readonly List<Thing> EmptyThingList = new List<Thing>();
+        //private Map map;
+        public List<Thing>[] thingGrid;
+
+        //Custom variables
         public List<IntVec3> cells = new List<IntVec3>();
         //(uses int division, may need to be adjusted)
         public IntVec3 Center;
 
-        //constructs a Ship_Structure
+        //constructs a Vessel_Structure
         public Vessel_Structure(Map map, Zone_Shipyard shipyard)
         {
             this.map = map;
             ResetGrids();
             int avgDenom = 0;
             IntVec3 avgNumerator = IntVec3.Zero;
-            foreach(IntVec3 cell in shipyard.cells)
+            foreach (IntVec3 cell in shipyard.cells)
             {
-                if (map.terrainGrid.TerrainAt(cell) != null)
+                if (map.terrainGrid.TerrainAt(cell).defName.StartsWith("Boat_"))
                 {
-                    SetTerrain(cell, map.terrainGrid.TerrainAt(cell));
-                    avgNumerator += cell;
-                    avgDenom++;
+                    if (map.terrainGrid.TerrainAt(cell) != null && map.terrainGrid.TerrainAt(cell).defName.StartsWith("Boat_"))
+                    {
+                        SetTerrain(cell, map.terrainGrid.TerrainAt(cell));
+                        map.terrainGrid.RemoveTopLayer(cell, false);
+                        avgNumerator += cell;
+                        avgDenom++;
+                    }
+                    if (map.terrainGrid.UnderTerrainAt(cell) != null)
+                    {
+                        SetUnderTerrain(cell, map.terrainGrid.UnderTerrainAt(cell));
+                        avgNumerator += cell;
+                        avgDenom++;
+                    }
+                    List<Thing> thingList = map.thingGrid.ThingsListAtFast(cell);
+                    for (int i = thingList.Count - 1; i >= 0; i--)
+                    {
+                        RegisterInCell(thingList[i], cell);
+                        thingList[i].DeSpawn();
+
+                        avgNumerator += cell;
+                        avgDenom++;
+                    }
+                    cells.Add(cell);
                 }
-                if (map.terrainGrid.UnderTerrainAt(cell) != null)
-                {
-                    SetUnderTerrain(cell, map.terrainGrid.UnderTerrainAt(cell));
-                    avgNumerator += cell;
-                    avgDenom++;
-                }
-                cells.Add(cell);
             }
             Center = new IntVec3(avgNumerator.x / avgDenom, avgNumerator.y / avgDenom, avgNumerator.z / avgDenom);
         }
-
+        
+        //Verse.TerrainGrid methods (some removed)
         public void ResetGrids()
         {
-            this.topGrid = new TerrainDef[this.map.cellIndices.NumGridCells];
-            this.underGrid = new TerrainDef[this.map.cellIndices.NumGridCells];
+            CellIndices cellIndices = map.cellIndices;
+            this.topGrid = new TerrainDef[cellIndices.NumGridCells];
+            this.underGrid = new TerrainDef[cellIndices.NumGridCells];
+
+            
+            this.thingGrid = new List<Thing>[cellIndices.NumGridCells];
+            for (int index = 0; index < cellIndices.NumGridCells; ++index)
+                this.thingGrid[index] = new List<Thing>(4);
         }
 
         public TerrainDef TerrainAt(int ind)
@@ -216,12 +249,18 @@ namespace DE_Ships
                 if (Current.ProgramState == ProgramState.Playing)
                     this.map.designationManager.DesignationAt(c, DesignationDefOf.SmoothFloor)?.Delete();
                 int index = this.map.cellIndices.CellToIndex(c);
+                /*
                 if (newTerr.layerable)
                 {
                     if (this.underGrid[index] == null)
+                    {
+                        //causes NullReferenceException
                         this.underGrid[index] = this.topGrid[index].passability == Traversability.Impassable ? TerrainDefOf.Sand : this.topGrid[index];
+                    }
+                        
                 }
                 else
+                */
                     this.underGrid[index] = (TerrainDef)null;
                 this.topGrid[index] = newTerr;
                 this.DoTerrainChangedEffects(c);
@@ -352,6 +391,137 @@ namespace DE_Ships
             TerrainDef terrainDef = this.underGrid[this.map.cellIndices.CellToIndex(c)];
             return "top: " + (terrain == null ? "null" : terrain.defName) + ", under=" + (terrainDef == null ? "null" : terrainDef.defName);
         }
+
+        //Verse.ThingGrid methods (some removed)
+        public void Register(Thing t)
+        {
+            if (t.def.size.x == 1 && t.def.size.z == 1)
+            {
+                this.RegisterInCell(t, t.Position);
+            }
+            else
+            {
+                CellRect cellRect = t.OccupiedRect();
+                for (int minZ = cellRect.minZ; minZ <= cellRect.maxZ; ++minZ)
+                {
+                    for (int minX = cellRect.minX; minX <= cellRect.maxX; ++minX)
+                        this.RegisterInCell(t, new IntVec3(minX, 0, minZ));
+                }
+            }
+        }
+
+        private void RegisterInCell(Thing t, IntVec3 c)
+        {
+            if (!c.InBounds(this.map))
+            {
+                Log.Warning(t.ToString() + " tried to register out of bounds at " + (object)c + ". Destroying.", false);
+                t.Destroy(DestroyMode.Vanish);
+            }
+            else
+                this.thingGrid[this.map.cellIndices.CellToIndex(c)].Add(t);
+        }
+
+        public void Deregister(Thing t, bool doEvenIfDespawned = false)
+        {
+            if (!t.Spawned && !doEvenIfDespawned)
+                return;
+            if (t.def.size.x == 1 && t.def.size.z == 1)
+            {
+                this.DeregisterInCell(t, t.Position);
+            }
+            else
+            {
+                CellRect cellRect = t.OccupiedRect();
+                for (int minZ = cellRect.minZ; minZ <= cellRect.maxZ; ++minZ)
+                {
+                    for (int minX = cellRect.minX; minX <= cellRect.maxX; ++minX)
+                        this.DeregisterInCell(t, new IntVec3(minX, 0, minZ));
+                }
+            }
+        }
+
+        private void DeregisterInCell(Thing t, IntVec3 c)
+        {
+            if (!c.InBounds(this.map))
+            {
+                Log.Error(t.ToString() + " tried to de-register out of bounds at " + (object)c, false);
+            }
+            else
+            {
+                int index = this.map.cellIndices.CellToIndex(c);
+                if (!this.thingGrid[index].Contains(t))
+                    return;
+                this.thingGrid[index].Remove(t);
+            }
+        }
+
+        public List<Thing> ThingsListAt(IntVec3 c)
+        {
+            if (c.InBounds(this.map))
+                return this.thingGrid[this.map.cellIndices.CellToIndex(c)];
+            Log.ErrorOnce("Got ThingsListAt out of bounds: " + (object)c, 495287, false);
+            return EmptyThingList;
+        }
+
+        public List<Thing> ThingsListAtFast(IntVec3 c)
+        {
+            return this.thingGrid[this.map.cellIndices.CellToIndex(c)];
+        }
+
+        public List<Thing> ThingsListAtFast(int index)
+        {
+            return this.thingGrid[index];
+        }
+
+        public bool CellContains(IntVec3 c, ThingCategory cat)
+        {
+            return this.ThingAt(c, cat) != null;
+        }
+
+        public Thing ThingAt(IntVec3 c, ThingCategory cat)
+        {
+            if (!c.InBounds(this.map))
+                return (Thing)null;
+            List<Thing> thingList = this.thingGrid[this.map.cellIndices.CellToIndex(c)];
+            for (int index = 0; index < thingList.Count; ++index)
+            {
+                if (thingList[index].def.category == cat)
+                    return thingList[index];
+            }
+            return (Thing)null;
+        }
+
+        public bool CellContains(IntVec3 c, ThingDef def)
+        {
+            return this.ThingAt(c, def) != null;
+        }
+
+        public Thing ThingAt(IntVec3 c, ThingDef def)
+        {
+            if (!c.InBounds(this.map))
+                return (Thing)null;
+            List<Thing> thingList = this.thingGrid[this.map.cellIndices.CellToIndex(c)];
+            for (int index = 0; index < thingList.Count; ++index)
+            {
+                if (thingList[index].def == def)
+                    return thingList[index];
+            }
+            return (Thing)null;
+        }
+
+        public T ThingAt<T>(IntVec3 c) where T : Thing
+        {
+            if (!c.InBounds(this.map))
+                return (T)null;
+            List<Thing> thingList = this.thingGrid[this.map.cellIndices.CellToIndex(c)];
+            for (int index = 0; index < thingList.Count; ++index)
+            {
+                T obj = thingList[index] as T;
+                if ((object)obj != null)
+                    return obj;
+            }
+            return (T)null;
+        }
     }
 
     [StaticConstructorOnStartup]
@@ -407,6 +577,7 @@ namespace DE_Ships
         }
         private static void EmbarkActionAfterLaunch()
         {
+            Caravan newCaravan = CaravanExitMapUtility.ExitMapAndCreateCaravan(TransferableUtility.GetPawnsFromTransferables(EmbarkUI.transferables), Faction.OfPlayer, sourceWorldObject.Tile, sourceWorldObject.Tile, -1, true);
             Vessel factionBase = (Vessel)WorldObjectMaker.MakeWorldObject(DefDatabase<WorldObjectDef>.GetNamed("Vessel"));
             factionBase.SetFaction(Find.FactionManager.AllFactionsListForReading[4]);
             factionBase.Name = SettlementNameGenerator.GenerateSettlementName(factionBase, (RulePackDef)null);
@@ -430,9 +601,12 @@ namespace DE_Ships
             factionBase.structure = new Vessel_Structure(sourceWorldObject.Map, shipyard);
             WaterGenerator.cachedStructure = factionBase.structure;
             Map newMap;
-            EmbarkUIActive = false;
             newMap = GetOrGenerateMapUtility.GetOrGenerateMap(tile, Find.World.info.initialMapSize, null);
-            CaravanEnterMapUtility.Enter(CaravanExitMapUtility.ExitMapAndCreateCaravan(TransferableUtility.GetPawnsFromTransferables(EmbarkUI.transferables), Faction.OfPlayer, sourceWorldObject.Tile, sourceWorldObject.Tile, -1, true), newMap, (Func<Pawn, IntVec3>)(p => factionBase.Map.Center));
+            //ISSUE: user "error message"
+            //ISSUE: pawns are placed at the center of the map, which may or may not be a valid location
+            //ISSUE: weather warning message
+            CaravanEnterMapUtility.Enter(newCaravan, newMap, (Func<Pawn, IntVec3>)(p => factionBase.Map.Center));
+            EmbarkUIActive = false;
         }
 
         public static Command EmbarkCommand()
