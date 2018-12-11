@@ -605,7 +605,6 @@ namespace DE_Ships
         private static void EmbarkActionAfterLaunch()
         {
             Caravan newCaravan = CaravanExitMapUtility.ExitMapAndCreateCaravan(TransferableUtility.GetPawnsFromTransferables(EmbarkUI.transferables), Faction.OfPlayer, sourceWorldObject.Tile, sourceWorldObject.Tile, -1, true);
-
             Vessel factionBase = (Vessel)WorldObjectMaker.MakeWorldObject(DefDatabase<WorldObjectDef>.GetNamed("Vessel"));
             factionBase.caravan = newCaravan;
             factionBase.SetFaction(Find.FactionManager.AllFactionsListForReading[4]);
