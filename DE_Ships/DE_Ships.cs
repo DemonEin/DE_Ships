@@ -770,7 +770,6 @@ namespace DE_Ships
         }
     }   
     //custom CaravanEnterMapUtility.Enter for embarking vessels; original goal: if embarkUI is active, caravan entering a map will not remove the caravan
-    /*
     [HarmonyPatch(typeof(CaravanEnterMapUtility))]
     [HarmonyPatch("Enter")]
     [HarmonyPatch(new Type[] {typeof(Caravan), typeof(Map), typeof(Func<Pawn, IntVec3>), typeof(CaravanDropInventoryMode), typeof(bool) })]
@@ -801,12 +800,11 @@ namespace DE_Ships
                         tmpPawns[index].inventory.UnloadEverything = true;
                     break;
             }
-            
+            */
             CaravanEnterMapUtility.DropAllInventory(tmpPawns);
             /*
             if (draftColonists)
                 CaravanEnterMapUtility.DraftColonists(tmpPawns);
-                
             if (map.IsPlayerHome)
             {
                 for (int index = 0; index < tmpPawns.Count; ++index)
@@ -815,15 +813,14 @@ namespace DE_Ships
                         tmpPawns[index].guest.WaitInsteadOfEscapingForDefaultTicks();
                 }
             }
-            
+            */
             caravan.RemoveAllPawns();
             /*
             if (caravan.Spawned)
                 Find.WorldObjects.Remove((WorldObject)caravan);
+            */
             tmpPawns.Clear();
-            
             return false;
         }
     }
-    */
 }
