@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Defs>
+  <!--
 	<WorldObjectDef>
 		<defName>Vessel</defName>
 		<label>vessel</label>
@@ -12,4 +13,16 @@
 		<expandingIconPriority>100</expandingIconPriority>
 		<expandMore>true</expandMore>
 	</WorldObjectDef>
+  -->
+  <WorldObjectDef>
+    <defName>Vessel</defName>
+    <label>vessel</label>
+    <description>A vessel out at sea.</description>
+    <worldObjectClass>DE_Ships.Vessel</worldObjectClass>
+    <texture>World/WorldObjects/Caravan</texture>
+    <expandingIcon>true</expandingIcon>
+    <expandingIconTexture>World/WorldObjects/Expanding/Caravan</expandingIconTexture>
+    <expandingIconPriority>200</expandingIconPriority>
+    <expandMore>true</expandMore>
+  </WorldObjectDef>
 </Defs>

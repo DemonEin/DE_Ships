@@ -42,6 +42,26 @@ namespace DE_Ships
         }
     }
 
+    public static class ShipMoverTest
+    {
+        private static void MoveAction()
+        {
+            MapParent sourceWorldObject = (MapParent)Find.WorldSelector.SingleSelectedObject;
+            sourceWorldObject.Tile = EmbarkShipUtility.AdjacentOceanTile(sourceWorldObject.Tile);
+        }
+        public static Command MoveCommand()
+        {
+            Command_Action commandAction = new Command_Action();
+            Action action = MoveAction;
+            commandAction.defaultLabel = "Move Ship";
+            commandAction.defaultDesc = "CommandAbandonHomeDesc".Translate();
+            //commandAction.icon = SettlementAbandonUtility.AbandonCommandTex;
+            commandAction.order = 30f;
+            commandAction.action = action;
+            return (Command)commandAction;
+        }
+    }
+
     //TODO: add expansion designator?
     //TODO: handle creation of multiple shipyards
     public class Designator_ZoneAdd_Shipyard : Designator_ZoneAdd
@@ -74,7 +94,7 @@ namespace DE_Ships
             if (c.Fogged(this.Map))
                 return (AcceptanceReport)false;
             //if (c.InNoZoneEdgeArea(this.Map))
-                //return (AcceptanceReport)"TooCloseToMapEdge".Translate();
+            //return (AcceptanceReport)"TooCloseToMapEdge".Translate();
             Zone zone = this.Map.zoneManager.ZoneAt(c);
             if (zone != null && zone.GetType() != this.zoneTypeToPlace)
                 return (AcceptanceReport)false;
@@ -83,7 +103,7 @@ namespace DE_Ships
                 if (!thing.def.CanOverlapZones)
                     return (AcceptanceReport)false;
             }
-
+                
             return (AcceptanceReport)true;
         }
     }
@@ -121,23 +141,29 @@ namespace DE_Ships
             MapGenerator.PlayerStartSpot = map.Center;
         }
     }
-    public class Vessel : Settlement
+    public class Vessel : MapParent
     {
         public Vessel_Structure structure;
         //the caravan that represents the vessel on the world map
         public Caravan caravan;
-        /*
-        public Vessel ()
+
+        public Vessel()
         {
-            this.SetFaction(Faction.OfPlayer);
+            this.caravan.def.selectable = false;
         }
-        */
-        /*
-        Vessel (int spawnTile, Zone_Shipyard shipyard)
+        public new void SetFaction(Faction faction)
         {
-            this.Tile = spawnTile;
+            base.SetFaction(faction);
+            caravan.SetFaction(faction);
         }
-        */
+        public new int Tile
+        {
+            set
+            {
+                base.Tile = value;
+                caravan.Tile = value;
+            }
+        }
         /*
         public override IEnumerable<GenStepWithParams> ExtraGenStepDefs
         {
@@ -168,7 +194,7 @@ namespace DE_Ships
 
         //constructs a Vessel_Structure
         public Vessel_Structure(Map map, Zone_Shipyard shipyard)
-        {
+        {   
             this.map = map;
             ResetGrids();
             int avgDenom = 0;
@@ -204,7 +230,7 @@ namespace DE_Ships
             }
             Center = new IntVec3(avgNumerator.x / avgDenom, avgNumerator.y / avgDenom, avgNumerator.z / avgDenom);
         }
-        
+
         //Verse.TerrainGrid methods (some removed)
         public void ResetGrids()
         {
@@ -212,7 +238,7 @@ namespace DE_Ships
             this.topGrid = new TerrainDef[cellIndices.NumGridCells];
             this.underGrid = new TerrainDef[cellIndices.NumGridCells];
 
-            
+
             this.thingGrid = new List<Thing>[cellIndices.NumGridCells];
             for (int index = 0; index < cellIndices.NumGridCells; ++index)
                 this.thingGrid[index] = new List<Thing>(4);
@@ -261,7 +287,7 @@ namespace DE_Ships
                 }
                 else
                 */
-                    this.underGrid[index] = (TerrainDef)null;
+                this.underGrid[index] = (TerrainDef)null;
                 this.topGrid[index] = newTerr;
                 this.DoTerrainChangedEffects(c);
             }
@@ -546,7 +572,7 @@ namespace DE_Ships
         private static MapParent sourceWorldObject;
         private static int tile;
         private static Dialog_FormCaravan EmbarkUI;
-        
+
         //ISSUE: arbitrary choice of tile if multiple tiles
         public static int AdjacentOceanTile(int tileID)
         {
@@ -569,7 +595,7 @@ namespace DE_Ships
 
         private static void EmbarkActionBeforeLaunch()
         {
-            
+
             sourceWorldObject = (MapParent)Find.WorldSelector.SingleSelectedObject;
             EmbarkUIActive = true;
             //ISSUE: ship will embark even if "cancel" is pressed
@@ -579,9 +605,10 @@ namespace DE_Ships
         private static void EmbarkActionAfterLaunch()
         {
             Caravan newCaravan = CaravanExitMapUtility.ExitMapAndCreateCaravan(TransferableUtility.GetPawnsFromTransferables(EmbarkUI.transferables), Faction.OfPlayer, sourceWorldObject.Tile, sourceWorldObject.Tile, -1, true);
+
             Vessel factionBase = (Vessel)WorldObjectMaker.MakeWorldObject(DefDatabase<WorldObjectDef>.GetNamed("Vessel"));
+            factionBase.caravan = newCaravan;
             factionBase.SetFaction(Find.FactionManager.AllFactionsListForReading[4]);
-            factionBase.Name = SettlementNameGenerator.GenerateSettlementName(factionBase, (RulePackDef)null);
             tile = AdjacentOceanTile(sourceWorldObject.Tile);
             factionBase.Tile = tile;
             Find.WorldObjects.Add((WorldObject)factionBase);
@@ -687,7 +714,7 @@ namespace DE_Ships
             }
         }
     }
-    [HarmonyPatch(typeof(SettlementBase))]
+    [HarmonyPatch(typeof(MapParent))]
     [HarmonyPatch("GetGizmos")]
     class SettlementGizmoPatch
     {
@@ -715,6 +742,7 @@ namespace DE_Ships
             }
             */
             newResult.Add(EmbarkShipUtility.EmbarkCommand());
+            newResult.Add(ShipMoverTest.MoveCommand());
             __result = newResult;
         }
     }
@@ -741,5 +769,62 @@ namespace DE_Ships
             }
             return true;
         }
+    }   
+    //custom CaravanEnterMapUtility.Enter for embarking vessels; original goal: if embarkUI is active, caravan entering a map will not remove the caravan
+    /*
+    [HarmonyPatch(typeof(CaravanEnterMapUtility))]
+    [HarmonyPatch("Enter")]
+    [HarmonyPatch(new Type[] {typeof(Caravan), typeof(Map), typeof(Func<Pawn, IntVec3>), typeof(CaravanDropInventoryMode), typeof(bool) })]
+    class CaravanEnterPatch
+    {
+        private static List<Pawn> tmpPawns = new List<Pawn>();
+        static bool Prefix(Caravan caravan, Map map, Func<Pawn, IntVec3> spawnCellGetter)
+        {
+            if (!EmbarkShipUtility.EmbarkUIActive)
+            {
+                return true;
+            }
+            tmpPawns.Clear();
+            tmpPawns.AddRange((IEnumerable<Pawn>)caravan.PawnsListForReading);
+            for (int index = 0; index < tmpPawns.Count; ++index)
+            {
+                IntVec3 loc = spawnCellGetter(tmpPawns[index]);
+                GenSpawn.Spawn((Thing)tmpPawns[index], loc, map, Rot4.Random, WipeMode.Vanish, false);
+            }
+            /*
+            switch (dropInventoryMode)
+            {
+                case CaravanDropInventoryMode.DropInstantly:
+                    CaravanEnterMapUtility.DropAllInventory(tmpPawns);
+                    break;
+                case CaravanDropInventoryMode.UnloadIndividually:
+                    for (int index = 0; index < tmpPawns.Count; ++index)
+                        tmpPawns[index].inventory.UnloadEverything = true;
+                    break;
+            }
+            
+            CaravanEnterMapUtility.DropAllInventory(tmpPawns);
+            /*
+            if (draftColonists)
+                CaravanEnterMapUtility.DraftColonists(tmpPawns);
+                
+            if (map.IsPlayerHome)
+            {
+                for (int index = 0; index < tmpPawns.Count; ++index)
+                {
+                    if (tmpPawns[index].IsPrisoner)
+                        tmpPawns[index].guest.WaitInsteadOfEscapingForDefaultTicks();
+                }
+            }
+            
+            caravan.RemoveAllPawns();
+            /*
+            if (caravan.Spawned)
+                Find.WorldObjects.Remove((WorldObject)caravan);
+            tmpPawns.Clear();
+            
+            return false;
+        }
     }
+    */
 }
