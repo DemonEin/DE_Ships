@@ -572,6 +572,7 @@ namespace DE_Ships
             
             sourceWorldObject = (MapParent)Find.WorldSelector.SingleSelectedObject;
             EmbarkUIActive = true;
+            //ISSUE: ship will embark even if "cancel" is pressed
             EmbarkUI = new Dialog_FormCaravan(sourceWorldObject.Map, false, EmbarkActionAfterLaunch);
             Find.WindowStack.Add(EmbarkUI);
         }
