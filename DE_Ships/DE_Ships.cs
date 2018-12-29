@@ -882,7 +882,7 @@ namespace DE_Ships
             {
                 return;
             }
-            __result = 10000;
+            __result = 100000;
         }
     }
     [HarmonyPatch(typeof(Caravan))]
@@ -896,6 +896,32 @@ namespace DE_Ships
                 return;
             }
             __result = false;
+        }
+    }
+    [HarmonyPatch(typeof(MapParent))]
+    [HarmonyPatch("Tick")]
+    class CaravanTickPatch
+    {
+        static void Postfix(MapParent __instance)
+        {
+            if (!(__instance is Vessel))
+            {
+                return;
+            }
+            __instance.Tile = ((Vessel)__instance).caravan.Tile;
+        }
+    }
+    [HarmonyPatch(typeof(WorldObject))]
+    [HarmonyPatch("DrawPos", MethodType.Getter)]
+    class VesselDrawPosPatch
+    {
+        static void Postfix(ref Vector3 __result, WorldObject __instance)
+        {
+            if (!(__instance is Vessel))
+            {
+                return;
+            }
+            __result = ((Vessel)__instance).caravan.DrawPos;
         }
     }
 }
