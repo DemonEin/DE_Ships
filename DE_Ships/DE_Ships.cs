@@ -103,7 +103,7 @@ namespace DE_Ships
                 if (!thing.def.CanOverlapZones)
                     return (AcceptanceReport)false;
             }
-                
+
             return (AcceptanceReport)true;
         }
     }
@@ -139,6 +139,26 @@ namespace DE_Ships
             }
             //only included to avoid an error, this is not actually used (I think)
             MapGenerator.PlayerStartSpot = map.Center;
+        }
+    }
+    [StaticConstructorOnStartup]
+    public static class VesselManager
+    {
+        public static List<Caravan> caravans = new List<Caravan>();
+        public static bool WorldObjectIsNavigator (WorldObject cara)
+        {
+            if (cara == null || cara.GetType() != typeof(Caravan))
+            {
+                return false;
+            }
+            foreach (Caravan caravan in caravans)
+            {
+                if (caravan == cara)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
     }
     public class Vessel : MapParent
@@ -194,7 +214,7 @@ namespace DE_Ships
 
         //constructs a Vessel_Structure
         public Vessel_Structure(Map map, Zone_Shipyard shipyard)
-        {   
+        {
             this.map = map;
             ResetGrids();
             int avgDenom = 0;
@@ -608,6 +628,7 @@ namespace DE_Ships
             newCaravan.def.selectable = false;
             Vessel factionBase = (Vessel)WorldObjectMaker.MakeWorldObject(DefDatabase<WorldObjectDef>.GetNamed("Vessel"));
             factionBase.caravan = newCaravan;
+            VesselManager.caravans.Add(newCaravan);
             factionBase.SetFaction(Faction.OfPlayer);
             tile = AdjacentOceanTile(sourceWorldObject.Tile);
             factionBase.Tile = tile;
@@ -769,11 +790,11 @@ namespace DE_Ships
             }
             return true;
         }
-    }   
+    }
     //custom CaravanEnterMapUtility.Enter for embarking vessels; original goal: if embarkUI is active, caravan entering a map will not remove the caravan
     [HarmonyPatch(typeof(CaravanEnterMapUtility))]
     [HarmonyPatch("Enter")]
-    [HarmonyPatch(new Type[] {typeof(Caravan), typeof(Map), typeof(Func<Pawn, IntVec3>), typeof(CaravanDropInventoryMode), typeof(bool) })]
+    [HarmonyPatch(new Type[] { typeof(Caravan), typeof(Map), typeof(Func<Pawn, IntVec3>), typeof(CaravanDropInventoryMode), typeof(bool) })]
     class CaravanEnterPatch
     {
         private static List<Pawn> tmpPawns = new List<Pawn>();
@@ -828,9 +849,53 @@ namespace DE_Ships
     [HarmonyPatch("Select")]
     class SelectorPatch
     {
-        static bool Prefix (WorldObject obj)
+        static bool Prefix(WorldObject obj)
         {
             return !(obj.GetType() == typeof(Vessel));
+        }
+    }
+    [HarmonyPatch(typeof(WorldPathGrid))]
+    [HarmonyPatch("Passable")]
+    class PassablityPatch
+    {
+        static void Postfix (ref bool __result, int tile)
+        {
+            if (!VesselManager.WorldObjectIsNavigator(Find.WorldSelector.SingleSelectedObject))
+            {
+                return;
+            }
+            if (!Find.WorldGrid.InBounds(tile))
+            {
+                __result = false;
+                return;
+            }
+            __result = Find.WorldGrid[tile].biome.defName == "Ocean";
+        }
+    }
+    [HarmonyPatch(typeof(Caravan))]
+    [HarmonyPatch("TicksPerMove", MethodType.Getter)]
+    class TicksPerMovePatch
+    {
+        static void Postfix (ref int __result, Caravan __instance)
+        {
+            if (!VesselManager.WorldObjectIsNavigator(__instance))
+            {
+                return;
+            }
+            __result = 10000;
+        }
+    }
+    [HarmonyPatch(typeof(Caravan))]
+    [HarmonyPatch("CantMove", MethodType.Getter)]
+    class CantMovePatch
+    {
+        static void Postfix(ref bool __result, Caravan __instance)
+        {
+            if (!VesselManager.WorldObjectIsNavigator(__instance))
+            {
+                return;
+            }
+            __result = false;
         }
     }
 }
