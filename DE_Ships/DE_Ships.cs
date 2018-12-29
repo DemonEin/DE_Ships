@@ -145,6 +145,8 @@ namespace DE_Ships
     public static class VesselManager
     {
         public static List<Caravan> caravans = new List<Caravan>();
+        public static List<Caravan_PathFollower> pathers = new List<Caravan_PathFollower>();
+        public static bool makeNavigator = false;
         public static bool WorldObjectIsNavigator (WorldObject cara)
         {
             if (cara == null || cara.GetType() != typeof(Caravan))
@@ -154,6 +156,39 @@ namespace DE_Ships
             foreach (Caravan caravan in caravans)
             {
                 if (caravan == cara)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        public static Caravan GetNavigatorFromPathFollower (Caravan_PathFollower pathFollower)
+        {
+            if (pathers.Count > 0)
+            {
+                Log.Error("test4: " + (pathFollower == pathers[0]));
+                Log.Error("test8: " + (VesselManager.pathers[0] == VesselManager.caravans[0].pather));
+            }
+            
+            for (int i = 0; i < pathers.Count; i++)
+            {
+                if (pathers[i] == pathFollower)
+                {
+                    Log.Error("test5");
+                    return caravans[i];
+                }
+            }
+            return null;
+        }
+        public static bool IsPathFollowerFromNavigator (Caravan_PathFollower pathFollower)
+        {
+            if (pathFollower == null)
+            {
+                return false;
+            }
+            foreach (Caravan caravan in caravans)
+            {
+                if (caravan.pather == pathFollower)
                 {
                     return true;
                 }
@@ -624,11 +659,13 @@ namespace DE_Ships
         }
         private static void EmbarkActionAfterLaunch()
         {
+            VesselManager.makeNavigator = true;
             Caravan newCaravan = CaravanExitMapUtility.ExitMapAndCreateCaravan(TransferableUtility.GetPawnsFromTransferables(EmbarkUI.transferables), Faction.OfPlayer, sourceWorldObject.Tile, sourceWorldObject.Tile, -1, true);
+            VesselManager.caravans.Add(newCaravan);
+            VesselManager.pathers.Add(newCaravan.pather);
             newCaravan.def.selectable = false;
             Vessel factionBase = (Vessel)WorldObjectMaker.MakeWorldObject(DefDatabase<WorldObjectDef>.GetNamed("Vessel"));
             factionBase.caravan = newCaravan;
-            VesselManager.caravans.Add(newCaravan);
             factionBase.SetFaction(Faction.OfPlayer);
             tile = AdjacentOceanTile(sourceWorldObject.Tile);
             factionBase.Tile = tile;
@@ -854,6 +891,7 @@ namespace DE_Ships
             return !(obj.GetType() == typeof(Vessel));
         }
     }
+    //ISSUE: changes passability only when the navigator is selected; so far, this has been fixed on a case-by-case basis
     [HarmonyPatch(typeof(WorldPathGrid))]
     [HarmonyPatch("Passable")]
     class PassablityPatch
@@ -909,6 +947,11 @@ namespace DE_Ships
                 return;
             }
             __instance.Tile = ((Vessel)__instance).caravan.Tile;
+            //DEBUG
+            if (Input.GetKey("up"))
+            {
+                Log.Error("" + ((Vessel)__instance).caravan.DrawPos);
+            }
         }
     }
     [HarmonyPatch(typeof(WorldObject))]
@@ -922,6 +965,118 @@ namespace DE_Ships
                 return;
             }
             __result = ((Vessel)__instance).caravan.DrawPos;
+        }
+    }
+    [HarmonyPatch(typeof(CaravanTweenerUtility))]
+    [HarmonyPatch("PatherTweenedPosRoot")]
+    class TweenerPatch
+    {
+        static bool Prefix (Caravan caravan, ref Vector3 __result)
+        {
+            if (!VesselManager.WorldObjectIsNavigator(caravan))
+            {
+                return true;
+            }
+            WorldGrid worldGrid = Find.WorldGrid;
+            if (!caravan.Spawned)
+            {
+                __result = worldGrid.GetTileCenter(caravan.Tile);
+                return false;
+            }
+            if (!caravan.pather.Moving)
+            {
+                __result = worldGrid.GetTileCenter(caravan.Tile);
+                return false;
+            }
+            float num = worldGrid[caravan.pather.nextTile].biome.defName.Equals("Ocean") ? (float)(1.0 - (double)caravan.pather.nextTileCostLeft / (double)caravan.pather.nextTileCostTotal) : 0.0f;
+            int tileID = caravan.pather.nextTile != caravan.Tile || caravan.pather.previousTileForDrawingIfInDoubt == -1 ? caravan.Tile : caravan.pather.previousTileForDrawingIfInDoubt;
+            __result = worldGrid.GetTileCenter(caravan.pather.nextTile) * num + worldGrid.GetTileCenter(tileID) * (1f - num);
+            return false;
+        }
+    }
+    /*
+    [HarmonyPatch]
+    class CaravanConstructorPatch
+    {
+        static MethodBase TargetMethod()
+        {
+            return typeof(Caravan).GetConstructor(new Type[] { });
+        }
+        static void Postfix (Caravan __instance)
+        {
+            if (VesselManager.makeNavigator)
+            {
+                VesselManager.caravans.Add(__instance);
+                VesselManager.pathers.Add(__instance.pather);
+                Log.Error("test6: " + (VesselManager.pathers[0] == __instance.pather));
+                Log.Error("test7: " + (VesselManager.pathers[0] == VesselManager.caravans[0].pather));
+                VesselManager.makeNavigator = false;
+            }
+        }
+    }
+    */
+    /*
+    [HarmonyPatch(typeof(Caravan_PathFollower))]
+    [HarmonyPatch("CostToMove")]
+    [HarmonyPatch(new Type[] { typeof(int), typeof(int), typeof(int), typeof(int?), typeof(bool), typeof(StringBuilder), typeof(string)})]
+    class CostToMovePatch
+    {
+        static void Postfix (Caravan_PathFollower __instance, ref int __result, Caravan ___caravan)
+        {
+            //Log.Error("" + (___caravan == null));
+            /*
+            if (!Find.WorldGrid[___caravan.Tile].biome.defName.Equals("Ocean"))
+            {
+                Log.Error("returning true; VesselManger.caravans.Count: " + VesselManager.caravans.Count+ "; .pathfollowers: " + VesselManager.caravans.Count());
+                return true;
+            }
+            if (start == end)
+                __result = 0;
+            if (explanation != null)
+            {
+                explanation.Append(caravanTicksPerMoveExplanation);
+                explanation.AppendLine();
+            }
+            StringBuilder explanation1 = explanation == null ? (StringBuilder)null : new StringBuilder();
+            //float num1 = !perceivedStatic || explanation != null ? WorldPathGrid.CalculatedMovementDifficultyAt(end, perceivedStatic, ticksAbs, explanation1) : Find.WorldPathGrid.PerceivedMovementDifficultyAt(end);
+            float num1 = !perceivedStatic || explanation != null ? 1 : 1;
+            //float difficultyMultiplier = Find.WorldGrid.GetRoadMovementDifficultyMultiplier(start, end, explanation1);
+            float difficultyMultiplier = 0;
+            if (explanation != null)
+            {
+                explanation.AppendLine();
+                explanation.Append("TileMovementDifficulty".Translate() + ":");
+                explanation.AppendLine();
+                explanation.Append(explanation1.ToString().Indented("  "));
+                explanation.AppendLine();
+                explanation.Append("  = " + (num1 * difficultyMultiplier).ToString("0.#"));
+            }
+            int num2 = Mathf.Clamp((int)((double)caravanTicksPerMove * (double)num1 * (double)difficultyMultiplier), 1, 30000);
+            if (explanation != null)
+            {
+                explanation.AppendLine();
+                explanation.AppendLine();
+                explanation.Append("FinalCaravanMovementSpeed".Translate() + ":");
+                int num3 = Mathf.CeilToInt((float)num2 / 1f);
+                explanation.AppendLine();
+                explanation.Append("  " + (60000f / (float)caravanTicksPerMove).ToString("0.#") + " / " + (num1 * difficultyMultiplier).ToString("0.#") + " = " + (60000f / (float)num3).ToString("0.#") + " " + "TilesPerDay".Translate());
+            }
+            __result = num2;
+            Log.Error("num2: " + num2);
+
+            return false;
+
+        }
+    }
+    */
+    [HarmonyPatch(typeof(Caravan_PathFollower))]
+    [HarmonyPatch("StartPath")]
+    [HarmonyPatch(new Type[] { typeof(int), typeof(CaravanArrivalAction), typeof(bool), typeof(bool) })]
+    class DebugPatch
+    {
+        static bool Prefix (Caravan_PathFollower __instance, ref bool __result, Caravan ___caravan)
+        {
+            return true;
         }
     }
 }
