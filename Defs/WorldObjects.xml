@@ -11,5 +11,6 @@
 		<expandingIconTexture>World/WorldObjects/Expanding/Caravan</expandingIconTexture>
 		<expandingIconPriority>200</expandingIconPriority>
 		<expandMore>true</expandMore>
+    <selectable>false</selectable>
 	</WorldObjectDef>
 </Defs> 

@@ -824,4 +824,13 @@ namespace DE_Ships
             return false;
         }
     }
+    [HarmonyPatch(typeof(WorldSelector))]
+    [HarmonyPatch("Select")]
+    class SelectorPatch
+    {
+        static bool Prefix (WorldObject obj)
+        {
+            return !(obj.GetType() == typeof(Vessel));
+        }
+    }
 }
