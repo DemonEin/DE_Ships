@@ -951,4 +951,56 @@ namespace DE_Ships
             return false;
         }
     }
+    [HarmonyPatch(typeof(Caravan_PathFollower))]
+    [HarmonyPatch("CostToMove")]
+    [HarmonyPatch(new Type[] { typeof(Caravan), typeof(int), typeof(int), typeof(int?) })]
+    class CostToMovePatch
+    {
+        static bool Prefix (ref int __result, Caravan caravan, int start, int end, int? ticksAbs = null)
+        {
+            if (!VesselManager.WorldObjectIsNavigator(caravan))
+            {
+                return true;
+            }
+
+            int caravanTicksPerMove = caravan.TicksPerMove;
+            bool perceivedStatic = false;
+            StringBuilder explanation = null;
+            string caravanTicksPerMoveExplanation = null;
+
+            if (start == end)
+                __result = 0;
+            if (explanation != null)
+            {
+                explanation.Append(caravanTicksPerMoveExplanation);
+                explanation.AppendLine();
+            }
+            StringBuilder explanation1 = explanation == null ? (StringBuilder)null : new StringBuilder();
+            float num1 = !perceivedStatic || explanation != null ? WorldPathGrid.CalculatedMovementDifficultyAt(end, perceivedStatic, ticksAbs, explanation1) : Find.WorldPathGrid.PerceivedMovementDifficultyAt(end);
+            //float difficultyMultiplier = Find.WorldGrid.GetRoadMovementDifficultyMultiplier(start, end, explanation1);
+            float difficultyMultiplier = 0;
+            if (explanation != null)
+            {
+                explanation.AppendLine();
+                explanation.Append("TileMovementDifficulty".Translate() + ":");
+                explanation.AppendLine();
+                explanation.Append(explanation1.ToString().Indented("  "));
+                explanation.AppendLine();
+                explanation.Append("  = " + (num1 * difficultyMultiplier).ToString("0.#"));
+            }
+            int num2 = Mathf.Clamp((int)((double)caravanTicksPerMove * (double)num1 * (double)difficultyMultiplier), 1, 30000);
+            if (explanation != null)
+            {
+                explanation.AppendLine();
+                explanation.AppendLine();
+                explanation.Append("FinalCaravanMovementSpeed".Translate() + ":");
+                int num3 = Mathf.CeilToInt((float)num2 / 1f);
+                explanation.AppendLine();
+                explanation.Append("  " + (60000f / (float)caravanTicksPerMove).ToString("0.#") + " / " + (num1 * difficultyMultiplier).ToString("0.#") + " = " + (60000f / (float)num3).ToString("0.#") + " " + "TilesPerDay".Translate());
+            }
+            __result = num2;
+
+            return false;
+        }
+    }
 }
