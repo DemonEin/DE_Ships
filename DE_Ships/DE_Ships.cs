@@ -924,4 +924,31 @@ namespace DE_Ships
             __result = ((Vessel)__instance).caravan.DrawPos;
         }
     }
+    [HarmonyPatch(typeof(CaravanTweenerUtility))]
+    [HarmonyPatch("PatherTweenedPosRoot")]
+    class TweenerPatch
+    {
+        static bool Prefix(Caravan caravan, ref Vector3 __result)
+        {
+            if (!VesselManager.WorldObjectIsNavigator(caravan))
+            {
+                return true;
+            }
+            WorldGrid worldGrid = Find.WorldGrid;
+            if (!caravan.Spawned)
+            {
+                __result = worldGrid.GetTileCenter(caravan.Tile);
+                return false;
+            }
+            if (!caravan.pather.Moving)
+            {
+                __result = worldGrid.GetTileCenter(caravan.Tile);
+                return false;
+            }
+            float num = worldGrid[caravan.pather.nextTile].biome.defName.Equals("Ocean") ? (float)(1.0 - (double)caravan.pather.nextTileCostLeft / (double)caravan.pather.nextTileCostTotal) : 0.0f;
+            int tileID = caravan.pather.nextTile != caravan.Tile || caravan.pather.previousTileForDrawingIfInDoubt == -1 ? caravan.Tile : caravan.pather.previousTileForDrawingIfInDoubt;
+            __result = worldGrid.GetTileCenter(caravan.pather.nextTile) * num + worldGrid.GetTileCenter(tileID) * (1f - num);
+            return false;
+        }
+    }
 }
