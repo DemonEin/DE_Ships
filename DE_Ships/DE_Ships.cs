@@ -144,6 +144,7 @@ namespace DE_Ships
     [StaticConstructorOnStartup]
     public static class VesselManager
     {
+        /*
         public static List<Caravan> caravans = new List<Caravan>();
         public static bool WorldObjectIsNavigator (WorldObject cara)
         {
@@ -157,6 +158,18 @@ namespace DE_Ships
                 {
                     return true;
                 }
+            }
+            return false;
+        }
+        */
+        public static bool WorldObjectIsNavigator (WorldObject cara)
+        {
+            if (cara == null || cara.GetType() != typeof(Caravan))
+            {
+                return false;
+            }
+            if (Find.WorldGrid[cara.Tile].biome.Equals(DefDatabase<BiomeDef>.GetNamed("Ocean"))) {
+                return true;
             }
             return false;
         }
@@ -183,6 +196,11 @@ namespace DE_Ships
             {
                 return base.Tile;
             }
+        }
+        public override void ExposeData()
+        {
+            base.ExposeData();
+            Scribe_References.Look<Caravan>(ref this.caravan, "caravan");
         }
         /*
         public override IEnumerable<GenStepWithParams> ExtraGenStepDefs
@@ -212,9 +230,18 @@ namespace DE_Ships
         //(uses int division, may need to be adjusted)
         public IntVec3 Center;
 
+        /*
+        private static int nextloadID = 0;
+        private int loadID;
+        */
+
         //constructs a Vessel_Structure
         public Vessel_Structure(Map map, Zone_Shipyard shipyard)
         {
+            /*
+            loadID = nextloadID;
+            nextloadID++;
+            */
             this.map = map;
             ResetGrids();
             int avgDenom = 0;
@@ -250,7 +277,12 @@ namespace DE_Ships
             }
             Center = new IntVec3(avgNumerator.x / avgDenom, avgNumerator.y / avgDenom, avgNumerator.z / avgDenom);
         }
-
+        /*
+        public string GetUniqueLoadID()
+        {
+            return "Vessel_Structrue_" + loadID;
+        }
+        */
         //Verse.TerrainGrid methods (some removed)
         public void ResetGrids()
         {
@@ -628,7 +660,7 @@ namespace DE_Ships
             newCaravan.def.selectable = false;
             Vessel factionBase = (Vessel)WorldObjectMaker.MakeWorldObject(DefDatabase<WorldObjectDef>.GetNamed("Vessel"));
             factionBase.caravan = newCaravan;
-            VesselManager.caravans.Add(newCaravan);
+            //VesselManager.caravans.Add(newCaravan);
             factionBase.SetFaction(Faction.OfPlayer);
             tile = AdjacentOceanTile(sourceWorldObject.Tile);
             factionBase.Tile = tile;
