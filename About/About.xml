@@ -2,7 +2,9 @@
 <ModMetaData>
 	<name>DE_Ships</name>
 	<author>DemonEinstein</author>
-	<targetVersion>0.19.1987</targetVersion>
+	<supportedVersions>
+    <li>1.0</li>
+  </supportedVersions>
 	<description></description>
 	<url></url>
 </ModMetaData>
