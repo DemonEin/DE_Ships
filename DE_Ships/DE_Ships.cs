@@ -893,6 +893,7 @@ namespace DE_Ships
     {
         static bool Prefix (ref bool __result, int tile)
         {
+            /*
             WorldObject selected = Find.WorldSelector.SingleSelectedObject;
             if (selected == null)
             {
@@ -909,6 +910,9 @@ namespace DE_Ships
                 return false;
             }
             __result = Find.WorldGrid[tile].biome.defName == "Ocean";
+            return false;
+            */
+            __result = true;
             return false;
         }
     }
@@ -1043,4 +1047,72 @@ namespace DE_Ships
             return false;
         }
     }
+    [HarmonyPatch(typeof(Dialog_FormCaravan))]
+    [HarmonyPatch("Notify_ChoseRoute")]
+    class VesselStartPatch
+    {
+        static void Postfix(Dialog_FormCaravan __instance, ref int ___startingTile)
+        {
+            int newTile = EmbarkShipUtility.AdjacentOceanTile(__instance.CurrentTile);
+            if (newTile != -1)
+            {
+                ___startingTile = newTile;
+            }
+        }
+    }
+    [HarmonyPatch(typeof(Dialog_FormCaravan))]
+    [HarmonyPatch("TryFormAndSendCaravan")]
+    class TestSendCaravanPatch
+    {
+        static void Postfix(int ___startingTile)
+        {
+            Log.Warning("startingTile at TryFormAndSendCaravan: " + ___startingTile);
+        }
+    }
+    [HarmonyPatch(typeof(CaravanFormingUtility))]
+    [HarmonyPatch("StartFormingCaravan")]
+    class TestLogPatch
+    {
+        static void Prefix(int startingTile, int destinationTile)
+        {
+            Log.Warning("startingTile at StartFormingCaravan: " + startingTile);
+            Log.Warning("destinationTile at StartFormingCaravan: " + destinationTile);
+        }
+    }
+    /*
+    [HarmonyPatch(typeof(Dialog_FormCaravan))]
+    [HarmonyPatch("TryFormAndSendCaravan")]
+    class SendCaravanPatch
+    {
+        //currently always acts as if it is a vessel
+        static bool Prefix(ref bool __result, Deia)
+        {
+            List<Pawn> fromTransferables = TransferableUtility.GetPawnsFromTransferables(this.transferables);
+            if (!this.CheckForErrors(fromTransferables))
+                __result = false;
+            Direction8Way direction8WayFromTo = Find.WorldGrid.GetDirection8WayFromTo(this.CurrentTile, this.startingTile);
+            IntVec3 spot;
+            if (!this.TryFindExitSpot(fromTransferables, true, out spot))
+            {
+                if (!this.TryFindExitSpot(fromTransferables, false, out spot))
+                {
+                    Messages.Message("CaravanCouldNotFindExitSpot".Translate((NamedArgument)direction8WayFromTo.LabelShort()), MessageTypeDefOf.RejectInput, false);
+                    __result = false;
+                }
+                Messages.Message("CaravanCouldNotFindReachableExitSpot".Translate((NamedArgument)direction8WayFromTo.LabelShort()), (LookTargets)new GlobalTargetInfo(spot, this.map, false), MessageTypeDefOf.CautionInput, false);
+            }
+            IntVec3 packingSpot;
+            if (!this.TryFindRandomPackingSpot(spot, out packingSpot))
+            {
+                Messages.Message("CaravanCouldNotFindPackingSpot".Translate((NamedArgument)direction8WayFromTo.LabelShort()), (LookTargets)new GlobalTargetInfo(spot, this.map, false), MessageTypeDefOf.RejectInput, false);
+                __result = false;
+            }
+            CaravanFormingUtility.StartFormingCaravan(fromTransferables.Where<Pawn>((Func<Pawn, bool>)(x => !x.Downed)).ToList<Pawn>(), fromTransferables.Where<Pawn>((Func<Pawn, bool>)(x => x.Downed)).ToList<Pawn>(), Faction.OfPlayer, this.transferables, packingSpot, spot, this.startingTile, this.destinationTile);
+            Messages.Message("CaravanFormationProcessStarted".Translate(), (LookTargets)((Thing)fromTransferables[0]), MessageTypeDefOf.PositiveEvent, false);
+            __result = true;
+
+            return false
+        }
+    }
+    */
 }
