@@ -7,10 +7,10 @@
 		<worldObjectClass>DE_Ships.Vessel</worldObjectClass>
 		<texture>World/WorldObjects/Caravan</texture>
 		<useDynamicDrawer>true</useDynamicDrawer>
-		<expandingIcon>true</expandingIcon>
+		<expandingIcon>false</expandingIcon>
 		<expandingIconTexture>World/WorldObjects/Expanding/Caravan</expandingIconTexture>
 		<expandingIconPriority>200</expandingIconPriority>
-		<expandMore>true</expandMore>
+		<expandMore>false</expandMore>
     <selectable>false</selectable>
 	</WorldObjectDef>
 </Defs> 

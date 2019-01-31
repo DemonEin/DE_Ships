@@ -886,22 +886,30 @@ namespace DE_Ships
             return !(obj.GetType() == typeof(Vessel));
         }
     }
+    //changes passability so that vessels can work as intended; sets passability based on the selected object, if nothing is selected, all things are passable
     [HarmonyPatch(typeof(WorldPathGrid))]
     [HarmonyPatch("Passable")]
     class PassablityPatch
     {
-        static void Postfix (ref bool __result, int tile)
+        static bool Prefix (ref bool __result, int tile)
         {
-            if (!VesselManager.WorldObjectIsNavigator(Find.WorldSelector.SingleSelectedObject))
+            WorldObject selected = Find.WorldSelector.SingleSelectedObject;
+            if (selected == null)
             {
-                return;
+                __result = true;
+                return false;
+            }
+            if (!VesselManager.WorldObjectIsNavigator(selected))
+            {
+                return true;
             }
             if (!Find.WorldGrid.InBounds(tile))
             {
                 __result = false;
-                return;
+                return false;
             }
             __result = Find.WorldGrid[tile].biome.defName == "Ocean";
+            return false;
         }
     }
     [HarmonyPatch(typeof(Caravan))]
