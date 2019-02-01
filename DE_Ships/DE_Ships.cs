@@ -144,6 +144,20 @@ namespace DE_Ships
     [StaticConstructorOnStartup]
     public static class VesselManager
     {
+        //ISSUE: does not save, so if a vessel is being sent when the game is reloaded, a regular caravan will form instead
+        public static List<LordJob_FormAndSendCaravan> sendVesselJobs = new List<LordJob_FormAndSendCaravan>();
+        public static bool FormVessel = false;
+        public static bool CaravanJobIsForVessel(LordJob_FormAndSendCaravan testJob)
+        {
+            for (int i = 0; i < sendVesselJobs.Count; i++)
+            {
+                if (sendVesselJobs[i] == testJob)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
         /*
         public static List<Caravan> caravans = new List<Caravan>();
         public static bool WorldObjectIsNavigator (WorldObject cara)
@@ -622,7 +636,6 @@ namespace DE_Ships
     {
         public static bool EmbarkUIActive = false;
         private static MapParent sourceWorldObject;
-        private static int tile;
         private static Dialog_FormCaravan EmbarkUI;
 
         //ISSUE: arbitrary choice of tile if multiple tiles
@@ -650,43 +663,11 @@ namespace DE_Ships
 
             sourceWorldObject = (MapParent)Find.WorldSelector.SingleSelectedObject;
             EmbarkUIActive = true;
-            //ISSUE: ship will embark even if "cancel" is pressed
             EmbarkUI = new Dialog_FormCaravan(sourceWorldObject.Map, false, EmbarkActionAfterLaunch);
             Find.WindowStack.Add(EmbarkUI);
         }
         private static void EmbarkActionAfterLaunch()
         {
-            Caravan newCaravan = CaravanExitMapUtility.ExitMapAndCreateCaravan(TransferableUtility.GetPawnsFromTransferables(EmbarkUI.transferables), Faction.OfPlayer, sourceWorldObject.Tile, sourceWorldObject.Tile, -1, true);
-            newCaravan.def.selectable = false;
-            Vessel factionBase = (Vessel)WorldObjectMaker.MakeWorldObject(DefDatabase<WorldObjectDef>.GetNamed("Vessel"));
-            factionBase.caravan = newCaravan;
-            //VesselManager.caravans.Add(newCaravan);
-            factionBase.SetFaction(Faction.OfPlayer);
-            tile = AdjacentOceanTile(sourceWorldObject.Tile);
-            factionBase.Tile = tile;
-            Find.WorldObjects.Add((WorldObject)factionBase);
-            Zone_Shipyard shipyard = null;
-            //finds the shipyard in the map of the selected object
-            bool b = true;
-            int i = 0;
-            while (b && i < (sourceWorldObject.Map.zoneManager.AllZones.Count))
-            {
-
-                if (sourceWorldObject.Map.zoneManager.AllZones[i] is Zone_Shipyard)
-                {
-                    shipyard = (Zone_Shipyard)sourceWorldObject.Map.zoneManager.AllZones[i];
-                    b = false;
-                }
-                i++;
-            }
-            factionBase.structure = new Vessel_Structure(sourceWorldObject.Map, shipyard);
-            WaterGenerator.cachedStructure = factionBase.structure;
-            Map newMap;
-            newMap = GetOrGenerateMapUtility.GetOrGenerateMap(tile, Find.World.info.initialMapSize, null);
-            //ISSUE: user "error message"
-            //ISSUE: pawns are placed at the center of the map, which may or may not be a valid location
-            //ISSUE: weather warning message
-            CaravanEnterMapUtility.Enter(newCaravan, newMap, (Func<Pawn, IntVec3>)(p => factionBase.Map.Center));
             EmbarkUIActive = false;
         }
 
@@ -893,9 +874,8 @@ namespace DE_Ships
     {
         static bool Prefix (ref bool __result, int tile)
         {
-            /*
             WorldObject selected = Find.WorldSelector.SingleSelectedObject;
-            if (selected == null)
+            if (selected == null || EmbarkShipUtility.EmbarkUIActive)
             {
                 __result = true;
                 return false;
@@ -910,9 +890,6 @@ namespace DE_Ships
                 return false;
             }
             __result = Find.WorldGrid[tile].biome.defName == "Ocean";
-            return false;
-            */
-            __result = true;
             return false;
         }
     }
@@ -1047,72 +1024,59 @@ namespace DE_Ships
             return false;
         }
     }
-    [HarmonyPatch(typeof(Dialog_FormCaravan))]
-    [HarmonyPatch("Notify_ChoseRoute")]
-    class VesselStartPatch
+    [HarmonyPatch(typeof(LordJob_FormAndSendCaravan), MethodType.Constructor)]
+    [HarmonyPatch(new Type[] { typeof(List<TransferableOneWay>), typeof(List<Pawn>), typeof(IntVec3), typeof(IntVec3), typeof(int), typeof(int) })]
+    class VesselFormJobCtorPatch
     {
-        static void Postfix(Dialog_FormCaravan __instance, ref int ___startingTile)
+        static void Postfix(LordJob_FormAndSendCaravan __instance)
         {
-            int newTile = EmbarkShipUtility.AdjacentOceanTile(__instance.CurrentTile);
-            if (newTile != -1)
+            if (EmbarkShipUtility.EmbarkUIActive)
             {
-                ___startingTile = newTile;
+                VesselManager.sendVesselJobs.Add(__instance);
             }
         }
     }
-    [HarmonyPatch(typeof(Dialog_FormCaravan))]
-    [HarmonyPatch("TryFormAndSendCaravan")]
-    class TestSendCaravanPatch
+    [HarmonyPatch(typeof(CaravanMaker))]
+    [HarmonyPatch("MakeCaravan")]
+    class VesselSpawnPatch
     {
-        static void Postfix(int ___startingTile)
+        static void Prefix(ref int startingTile)
         {
-            Log.Warning("startingTile at TryFormAndSendCaravan: " + ___startingTile);
-        }
-    }
-    [HarmonyPatch(typeof(CaravanFormingUtility))]
-    [HarmonyPatch("StartFormingCaravan")]
-    class TestLogPatch
-    {
-        static void Prefix(int startingTile, int destinationTile)
-        {
-            Log.Warning("startingTile at StartFormingCaravan: " + startingTile);
-            Log.Warning("destinationTile at StartFormingCaravan: " + destinationTile);
-        }
-    }
-    /*
-    [HarmonyPatch(typeof(Dialog_FormCaravan))]
-    [HarmonyPatch("TryFormAndSendCaravan")]
-    class SendCaravanPatch
-    {
-        //currently always acts as if it is a vessel
-        static bool Prefix(ref bool __result, Deia)
-        {
-            List<Pawn> fromTransferables = TransferableUtility.GetPawnsFromTransferables(this.transferables);
-            if (!this.CheckForErrors(fromTransferables))
-                __result = false;
-            Direction8Way direction8WayFromTo = Find.WorldGrid.GetDirection8WayFromTo(this.CurrentTile, this.startingTile);
-            IntVec3 spot;
-            if (!this.TryFindExitSpot(fromTransferables, true, out spot))
+            if (VesselManager.FormVessel)
             {
-                if (!this.TryFindExitSpot(fromTransferables, false, out spot))
-                {
-                    Messages.Message("CaravanCouldNotFindExitSpot".Translate((NamedArgument)direction8WayFromTo.LabelShort()), MessageTypeDefOf.RejectInput, false);
-                    __result = false;
-                }
-                Messages.Message("CaravanCouldNotFindReachableExitSpot".Translate((NamedArgument)direction8WayFromTo.LabelShort()), (LookTargets)new GlobalTargetInfo(spot, this.map, false), MessageTypeDefOf.CautionInput, false);
+                startingTile = EmbarkShipUtility.AdjacentOceanTile(startingTile);
             }
-            IntVec3 packingSpot;
-            if (!this.TryFindRandomPackingSpot(spot, out packingSpot))
-            {
-                Messages.Message("CaravanCouldNotFindPackingSpot".Translate((NamedArgument)direction8WayFromTo.LabelShort()), (LookTargets)new GlobalTargetInfo(spot, this.map, false), MessageTypeDefOf.RejectInput, false);
-                __result = false;
-            }
-            CaravanFormingUtility.StartFormingCaravan(fromTransferables.Where<Pawn>((Func<Pawn, bool>)(x => !x.Downed)).ToList<Pawn>(), fromTransferables.Where<Pawn>((Func<Pawn, bool>)(x => x.Downed)).ToList<Pawn>(), Faction.OfPlayer, this.transferables, packingSpot, spot, this.startingTile, this.destinationTile);
-            Messages.Message("CaravanFormationProcessStarted".Translate(), (LookTargets)((Thing)fromTransferables[0]), MessageTypeDefOf.PositiveEvent, false);
-            __result = true;
-
-            return false
         }
     }
-    */
+    [HarmonyPatch(typeof(LordJob_FormAndSendCaravan))]
+    [HarmonyPatch("SendCaravan")]
+    class VesselFormJobPatch
+    {
+        static void Prefix(LordJob_FormAndSendCaravan __instance)
+        {
+            if (VesselManager.CaravanJobIsForVessel(__instance))
+            {
+                VesselManager.FormVessel = true;
+                VesselManager.sendVesselJobs.Remove(__instance);
+            }
+        }
+        static void Postfix()
+        {
+            VesselManager.FormVessel = false;
+        }
+    }
+    [HarmonyPatch(typeof(Caravan_PathFollower))]
+    [HarmonyPatch("TryRecoverFromUnwalkablePosition")]
+    class PreventTeleportPatch
+    {
+        static bool Prefix(ref bool __result, Caravan ___caravan)
+        {
+            if (Find.WorldGrid[___caravan.Tile].biome.defName.Equals("Ocean"))
+            {
+                __result = true;
+                return false;
+            }
+            return true;
+        }
+    }
 }
