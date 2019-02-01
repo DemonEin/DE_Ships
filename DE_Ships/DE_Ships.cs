@@ -145,13 +145,69 @@ namespace DE_Ships
     public static class VesselManager
     {
         //ISSUE: does not save, so if a vessel is being sent when the game is reloaded, a regular caravan will form instead
-        public static List<LordJob_FormAndSendCaravan> sendVesselJobs = new List<LordJob_FormAndSendCaravan>();
-        public static bool FormVessel = false;
+        private static List<LordJob_FormAndSendCaravan> SendVesselJobs = new List<LordJob_FormAndSendCaravan>();
+        private static List<Zone_Shipyard> ShipyardsToSend = new List<Zone_Shipyard>();
+        private static LordJob_FormAndSendCaravan ActiveJob;
+        private static Zone_Shipyard activeshipyard;
+        public static bool FormVessel
+        {
+            get
+            {
+                return ActiveJob != null;
+            }
+        }
+        public static Zone_Shipyard ActiveShipyard
+        {
+            get
+            {
+                return activeshipyard;
+            }
+        }
+        public static void AddVesselEmbark (LordJob_FormAndSendCaravan job, Zone_Shipyard shipyard)
+        {
+            SendVesselJobs.Add(job);
+            ShipyardsToSend.Add(shipyard);
+        }
+        private static void RemoveVesselEmbark (LordJob_FormAndSendCaravan job)
+        {
+            for (int i = 0; i < SendVesselJobs.Count; i++)
+            {
+                if (SendVesselJobs[i] == job)
+                {
+                    SendVesselJobs.RemoveAt(i);
+                    ShipyardsToSend.RemoveAt(i);
+                    return;
+                }
+            }
+            Log.Error("Failed to find VesselEmbark job to remove");
+        }
+        public static void ActivateVesselForming(LordJob_FormAndSendCaravan job)
+        {
+            ActiveJob = job;
+            activeshipyard = GetShipyardToEmbark(job);
+        }
+        public static void DeactivateVesselForming(LordJob_FormAndSendCaravan job)
+        {
+            RemoveVesselEmbark(job);
+            ActiveJob = null;
+            activeshipyard = null;
+        }
+        public static Zone_Shipyard GetShipyardToEmbark(LordJob_FormAndSendCaravan job)
+        {
+            for (int i = 0; i < SendVesselJobs.Count; i++)
+            {
+                if (SendVesselJobs[i] == job)
+                {
+                    return ShipyardsToSend[i];
+                }
+            }
+            return null;
+        }
         public static bool CaravanJobIsForVessel(LordJob_FormAndSendCaravan testJob)
         {
-            for (int i = 0; i < sendVesselJobs.Count; i++)
+            for (int i = 0; i < SendVesselJobs.Count; i++)
             {
-                if (sendVesselJobs[i] == testJob)
+                if (SendVesselJobs[i] == testJob)
                 {
                     return true;
                 }
@@ -250,13 +306,13 @@ namespace DE_Ships
         */
 
         //constructs a Vessel_Structure
-        public Vessel_Structure(Map map, Zone_Shipyard shipyard)
+        public Vessel_Structure(Zone_Shipyard shipyard)
         {
             /*
             loadID = nextloadID;
             nextloadID++;
             */
-            this.map = map;
+            this.map = shipyard.Map;
             ResetGrids();
             int avgDenom = 0;
             IntVec3 avgNumerator = IntVec3.Zero;
@@ -658,6 +714,20 @@ namespace DE_Ships
             return oceanNeighbors[0];
         }
 
+        public static Zone_Shipyard FindShipyardInMap(Map map)
+        {
+            foreach (Zone zone in sourceWorldObject.Map.zoneManager.AllZones)
+            {
+
+                if (zone is Zone_Shipyard)
+                {
+                    return ((Zone_Shipyard)zone);
+                }
+            }
+            Log.Warning("No shipyards found in map");
+            return null;
+        }
+
         private static void EmbarkActionBeforeLaunch()
         {
 
@@ -1032,7 +1102,7 @@ namespace DE_Ships
         {
             if (EmbarkShipUtility.EmbarkUIActive)
             {
-                VesselManager.sendVesselJobs.Add(__instance);
+                VesselManager.AddVesselEmbark(__instance, EmbarkShipUtility.FindShipyardInMap(((MapParent)Find.WorldSelector.SingleSelectedObject).Map));
             }
         }
     }
@@ -1056,13 +1126,12 @@ namespace DE_Ships
         {
             if (VesselManager.CaravanJobIsForVessel(__instance))
             {
-                VesselManager.FormVessel = true;
-                VesselManager.sendVesselJobs.Remove(__instance);
+                VesselManager.ActivateVesselForming(__instance);
             }
         }
-        static void Postfix()
+        static void Postfix(LordJob_FormAndSendCaravan __instance)
         {
-            VesselManager.FormVessel = false;
+            VesselManager.DeactivateVesselForming(__instance);
         }
     }
     [HarmonyPatch(typeof(Caravan_PathFollower))]
@@ -1074,6 +1143,41 @@ namespace DE_Ships
             if (Find.WorldGrid[___caravan.Tile].biome.defName.Equals("Ocean"))
             {
                 __result = true;
+                return false;
+            }
+            return true;
+        }
+    }
+    [HarmonyPatch(typeof(CaravanExitMapUtility))]
+    [HarmonyPatch("ExitMapAndCreateCaravan")]
+    [HarmonyPatch(new Type[] { typeof(IEnumerable<Pawn>), typeof(Faction), typeof(int), typeof(int), typeof(int), typeof(bool) })]
+    class PostCaravanCreationPatch
+    {
+        static void Postfix(Caravan __result)
+        {
+            __result.def.selectable = false;
+            Vessel factionBase = (Vessel)WorldObjectMaker.MakeWorldObject(DefDatabase<WorldObjectDef>.GetNamed("Vessel"));
+            factionBase.caravan = __result;
+            factionBase.Tile = __result.Tile;
+            factionBase.SetFaction(Faction.OfPlayer);
+            Find.WorldObjects.Add((WorldObject)factionBase);
+            factionBase.structure = new Vessel_Structure(VesselManager.ActiveShipyard);
+            WaterGenerator.cachedStructure = factionBase.structure;
+            Map newMap;
+            newMap = GetOrGenerateMapUtility.GetOrGenerateMap(__result.Tile, Find.World.info.initialMapSize, null);
+            //ISSUE: pawns are placed at the center of the map, which may or may not be a valid location
+            //ISSUE: weather warning message
+            CaravanEnterMapUtility.Enter(__result, newMap, (Func<Pawn, IntVec3>)(p => factionBase.Map.Center));
+        }
+    }
+    [HarmonyPatch(typeof(WorldObjectsHolder))]
+    [HarmonyPatch("Remove")]
+    class CaravanAntiDeletionPatch
+    {
+        static bool Prefix(WorldObject o)
+        {
+            if (VesselManager.WorldObjectIsNavigator(o) && VesselManager.FormVessel)
+            {
                 return false;
             }
             return true;
