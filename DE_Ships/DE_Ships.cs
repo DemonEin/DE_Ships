@@ -312,7 +312,7 @@ namespace DE_Ships
             loadID = nextloadID;
             nextloadID++;
             */
-            this.map = shipyard.Map;
+            map = shipyard.Map;
             ResetGrids();
             int avgDenom = 0;
             IntVec3 avgNumerator = IntVec3.Zero;
@@ -320,19 +320,22 @@ namespace DE_Ships
             {
                 if (map.terrainGrid.TerrainAt(cell).defName.StartsWith("Boat_"))
                 {
-                    if (map.terrainGrid.TerrainAt(cell) != null && map.terrainGrid.TerrainAt(cell).defName.StartsWith("Boat_"))
+                    if (map.terrainGrid.TerrainAt(cell) != null)
                     {
                         SetTerrain(cell, map.terrainGrid.TerrainAt(cell));
                         map.terrainGrid.RemoveTopLayer(cell, false);
+                        FilthMaker.RemoveAllFilth(cell, map);
                         avgNumerator += cell;
                         avgDenom++;
                     }
+                    /*
                     if (map.terrainGrid.UnderTerrainAt(cell) != null)
                     {
                         SetUnderTerrain(cell, map.terrainGrid.UnderTerrainAt(cell));
                         avgNumerator += cell;
                         avgDenom++;
                     }
+                    */
                     List<Thing> thingList = map.thingGrid.ThingsListAtFast(cell);
                     for (int i = thingList.Count - 1; i >= 0; i--)
                     {
@@ -1131,7 +1134,10 @@ namespace DE_Ships
         }
         static void Postfix(LordJob_FormAndSendCaravan __instance)
         {
-            VesselManager.DeactivateVesselForming(__instance);
+            if (VesselManager.FormVessel)
+            {
+                VesselManager.DeactivateVesselForming(__instance);
+            }
         }
     }
     [HarmonyPatch(typeof(Caravan_PathFollower))]
@@ -1155,19 +1161,22 @@ namespace DE_Ships
     {
         static void Postfix(Caravan __result)
         {
-            __result.def.selectable = false;
-            Vessel factionBase = (Vessel)WorldObjectMaker.MakeWorldObject(DefDatabase<WorldObjectDef>.GetNamed("Vessel"));
-            factionBase.caravan = __result;
-            factionBase.Tile = __result.Tile;
-            factionBase.SetFaction(Faction.OfPlayer);
-            Find.WorldObjects.Add((WorldObject)factionBase);
-            factionBase.structure = new Vessel_Structure(VesselManager.ActiveShipyard);
-            WaterGenerator.cachedStructure = factionBase.structure;
-            Map newMap;
-            newMap = GetOrGenerateMapUtility.GetOrGenerateMap(__result.Tile, Find.World.info.initialMapSize, null);
-            //ISSUE: pawns are placed at the center of the map, which may or may not be a valid location
-            //ISSUE: weather warning message
-            CaravanEnterMapUtility.Enter(__result, newMap, (Func<Pawn, IntVec3>)(p => factionBase.Map.Center));
+            if (VesselManager.FormVessel)
+            {
+                __result.def.selectable = false;
+                Vessel factionBase = (Vessel)WorldObjectMaker.MakeWorldObject(DefDatabase<WorldObjectDef>.GetNamed("Vessel"));
+                factionBase.caravan = __result;
+                factionBase.Tile = __result.Tile;
+                factionBase.SetFaction(Faction.OfPlayer);
+                Find.WorldObjects.Add((WorldObject)factionBase);
+                factionBase.structure = new Vessel_Structure(VesselManager.ActiveShipyard);
+                WaterGenerator.cachedStructure = factionBase.structure;
+                Map newMap;
+                newMap = GetOrGenerateMapUtility.GetOrGenerateMap(__result.Tile, Find.World.info.initialMapSize, null);
+                //ISSUE: pawns are placed at the center of the map, which may or may not be a valid location
+                //ISSUE: weather warning message
+                CaravanEnterMapUtility.Enter(__result, newMap, (Func<Pawn, IntVec3>)(p => factionBase.Map.Center));
+            }
         }
     }
     [HarmonyPatch(typeof(WorldObjectsHolder))]
@@ -1181,6 +1190,80 @@ namespace DE_Ships
                 return false;
             }
             return true;
+        }
+    }
+    //ISSUE: check if this solves a bug, or is not neccessary
+    [HarmonyPatch(typeof(ColonistBar))]
+    [HarmonyPatch("CheckRecacheEntries")]
+    class HideEmptyCaravansPatch
+    {
+        static bool Prefix(ColonistBar __instance, ref bool ___entriesDirty, ref List<Map> ___tmpMaps, ref List<Pawn> ___tmpPawns, ref List<Caravan> ___tmpCaravans, ref List<ColonistBar.Entry> ___cachedEntries, ref ColonistBarDrawLocsFinder ___drawLocsFinder, ref List<Vector2> ___cachedDrawLocs, ref float ___cachedScale)
+        {
+            if (!___entriesDirty)
+                return false;
+            ___entriesDirty = false;
+            ___cachedEntries.Clear();
+            if (Find.PlaySettings.showColonistBar)
+            {
+                ___tmpMaps.Clear();
+                ___tmpMaps.AddRange((IEnumerable<Map>)Find.Maps);
+                ___tmpMaps.SortBy<Map, bool, int>((Func<Map, bool>)(x => !x.IsPlayerHome), (Func<Map, int>)(x => x.uniqueID));
+                int group = 0;
+                for (int index1 = 0; index1 < ___tmpMaps.Count; ++index1)
+                {
+                    ___tmpPawns.Clear();
+                    ___tmpPawns.AddRange(___tmpMaps[index1].mapPawns.FreeColonists);
+                    List<Thing> thingList = ___tmpMaps[index1].listerThings.ThingsInGroup(ThingRequestGroup.Corpse);
+                    for (int index2 = 0; index2 < thingList.Count; ++index2)
+                    {
+                        if (!thingList[index2].IsDessicated())
+                        {
+                            Pawn innerPawn = ((Corpse)thingList[index2]).InnerPawn;
+                            if (innerPawn != null && innerPawn.IsColonist)
+                                ___tmpPawns.Add(innerPawn);
+                        }
+                    }
+                    List<Pawn> allPawnsSpawned = ___tmpMaps[index1].mapPawns.AllPawnsSpawned;
+                    for (int index2 = 0; index2 < allPawnsSpawned.Count; ++index2)
+                    {
+                        Corpse carriedThing = allPawnsSpawned[index2].carryTracker.CarriedThing as Corpse;
+                        if (carriedThing != null && !carriedThing.IsDessicated() && carriedThing.InnerPawn.IsColonist)
+                            ___tmpPawns.Add(carriedThing.InnerPawn);
+                    }
+                    PlayerPawnsDisplayOrderUtility.Sort(___tmpPawns);
+                    for (int index2 = 0; index2 < ___tmpPawns.Count; ++index2)
+                        ___cachedEntries.Add(new ColonistBar.Entry(___tmpPawns[index2], ___tmpMaps[index1], group));
+                    if (!___tmpPawns.Any<Pawn>())
+                        ___cachedEntries.Add(new ColonistBar.Entry((Pawn)null, ___tmpMaps[index1], group));
+                    ++group;
+                }
+                ___tmpCaravans.Clear();
+                ___tmpCaravans.AddRange((IEnumerable<Caravan>)Find.WorldObjects.Caravans);
+                ___tmpCaravans.SortBy<Caravan, int>((Func<Caravan, int>)(x => x.ID));
+                for (int index1 = 0; index1 < ___tmpCaravans.Count; ++index1)
+                {
+                    //change from original
+                    if (___tmpCaravans[index1].IsPlayerControlled && ___tmpCaravans[index1].pawns.Count != 0)
+                    {
+                        ___tmpPawns.Clear();
+                        ___tmpPawns.AddRange((IEnumerable<Pawn>)___tmpCaravans[index1].PawnsListForReading);
+                        PlayerPawnsDisplayOrderUtility.Sort(___tmpPawns);
+                        for (int index2 = 0; index2 < ___tmpPawns.Count; ++index2)
+                        {
+                            if (___tmpPawns[index2].IsColonist)
+                                ___cachedEntries.Add(new ColonistBar.Entry(___tmpPawns[index2], (Map)null, group));
+                        }
+                        ++group;
+                    }
+                }
+            }
+            __instance.drawer.Notify_RecachedEntries();
+            ___tmpPawns.Clear();
+            ___tmpMaps.Clear();
+            ___tmpCaravans.Clear();
+            ___drawLocsFinder.CalculateDrawLocs(___cachedDrawLocs, out ___cachedScale);
+
+            return false;
         }
     }
 }
