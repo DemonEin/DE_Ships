@@ -64,6 +64,7 @@ namespace DE_Ships
 
     //TODO: add expansion designator?
     //TODO: handle creation of multiple shipyards
+    //ISSUE: Shipyards cannot be created in places where things that block zones already exist
     public class Designator_ZoneAdd_Shipyard : Designator_ZoneAdd
     {
         public Designator_ZoneAdd_Shipyard()
@@ -87,6 +88,7 @@ namespace DE_Ships
         {
             return (Zone)new Zone_Shipyard(Find.CurrentMap.zoneManager);
         }
+        //ISSUE: can build things outside the zone in a single designation if there is a at least one valid designation (not directly related to this method)
         public override AcceptanceReport CanDesignateCell(IntVec3 c)
         {
             if (!c.InBounds(this.Map))
@@ -98,12 +100,14 @@ namespace DE_Ships
             Zone zone = this.Map.zoneManager.ZoneAt(c);
             if (zone != null && zone.GetType() != this.zoneTypeToPlace)
                 return (AcceptanceReport)false;
+            //allows shipyards zones to exist on top of objects when the zone is placed
+            /*
             foreach (Thing thing in this.Map.thingGrid.ThingsAt(c))
             {
                 if (!thing.def.CanOverlapZones)
                     return (AcceptanceReport)false;
             }
-
+            */
             return (AcceptanceReport)true;
         }
     }
@@ -306,6 +310,7 @@ namespace DE_Ships
         */
 
         //constructs a Vessel_Structure
+        //ISSUE: creates error message "moved -- not supported"
         public Vessel_Structure(Zone_Shipyard shipyard)
         {
             /*
@@ -1263,6 +1268,30 @@ namespace DE_Ships
             ___tmpCaravans.Clear();
             ___drawLocsFinder.CalculateDrawLocs(___cachedDrawLocs, out ___cachedScale);
 
+            return false;
+        }
+    }
+    //prevents the shipyard zone from being removed in places where buildings are added
+    [HarmonyPatch(typeof(ZoneManager))]
+    [HarmonyPatch("Notify_NoZoneOverlapThingSpawned")]
+    class ExistingZoneOverlapPatch
+    {
+        static bool Prefix(Thing thing, ZoneManager __instance)
+        {
+            CellRect cellRect = thing.OccupiedRect();
+            for (int minZ = cellRect.minZ; minZ <= cellRect.maxZ; ++minZ)
+            {
+                for (int minX = cellRect.minX; minX <= cellRect.maxX; ++minX)
+                {
+                    IntVec3 c = new IntVec3(minX, 0, minZ);
+                    Zone zone = __instance.ZoneAt(c);
+                    if (zone != null && !(zone is Zone_Shipyard))
+                    {
+                        zone.RemoveCell(c);
+                        zone.CheckContiguous();
+                    }
+                }
+            }
             return false;
         }
     }
